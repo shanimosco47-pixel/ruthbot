@@ -11,7 +11,7 @@ const resend = new Resend(env.EMAIL_API_KEY);
  * HTML template: single file, inline CSS, RTL layout.
  */
 export async function sendSessionSummaryEmail(params: SessionSummaryEmail): Promise<boolean> {
-  const { to, userName, sessionDate, personalSummary, sharedCommitments, encouragement, topicCategory, ctaUrl } = params;
+  const { to, userName, sessionDate, personalSummary, sharedCommitments, encouragement, topicCategory, ctaUrl, unsubscribeUrl } = params;
 
   const resource = CATEGORY_RESOURCES[topicCategory];
 
@@ -24,11 +24,12 @@ export async function sendSessionSummaryEmail(params: SessionSummaryEmail): Prom
     resourceTitle: resource.title,
     resourceUrl: resource.url,
     ctaUrl,
+    unsubscribeUrl: unsubscribeUrl || `${ctaUrl}?start=unsubscribe`,
   });
 
   try {
     await resend.emails.send({
-      from: 'CoupleBot <noreply@couplebot.app>',
+      from: 'רות בוט זוגיות <noreply@couplebot.app>',
       to: [to],
       subject: `סיכום הסשן שלך — ${sessionDate}`,
       html,
@@ -54,15 +55,16 @@ function buildEmailHtml(params: {
   resourceTitle: string;
   resourceUrl: string;
   ctaUrl: string;
+  unsubscribeUrl: string;
 }): string {
-  const { userName, sessionDate, personalSummary, sharedCommitments, encouragement, resourceTitle, resourceUrl, ctaUrl } = params;
+  const { userName, sessionDate, personalSummary, sharedCommitments, encouragement, resourceTitle, resourceUrl, ctaUrl, unsubscribeUrl } = params;
 
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>סיכום סשן CoupleBot</title>
+<title>סיכום סשן — רות בוט זוגיות</title>
 </head>
 <body style="margin:0; padding:0; background-color:#F5F3F0; font-family:Arial, Helvetica, sans-serif; direction:rtl; text-align:right;">
 
@@ -72,7 +74,7 @@ function buildEmailHtml(params: {
   <table width="600" cellpadding="0" cellspacing="0">
   <tr>
     <td style="color:#FFFFFF; font-size:24px; font-weight:bold; padding:0 24px;">
-      CoupleBot 💙
+      רות בוט זוגיות 💙
     </td>
     <td style="color:#FFFFFF; font-size:14px; text-align:left; padding:0 24px;">
       ${sessionDate}
@@ -175,10 +177,10 @@ function buildEmailHtml(params: {
   <table width="600" cellpadding="0" cellspacing="0">
   <tr><td style="padding:0 24px; text-align:center;">
     <p style="color:#999; font-size:13px; margin:0;">
-      CoupleBot — מרחב בטוח לשיחות שחשובות
+      רות בוט זוגיות — מרחב בטוח לשיחות שחשובות
     </p>
     <p style="color:#999; font-size:12px; margin-top:8px;">
-      <a href="#unsubscribe" style="color:#999; text-decoration:underline;">הסרה מרשימת התפוצה</a>
+      <a href="${unsubscribeUrl}" style="color:#999; text-decoration:underline;">הסרה מרשימת התפוצה</a>
     </p>
   </td></tr>
   </table>

@@ -1,7 +1,12 @@
 import { prisma } from '../../db/client';
 import { callClaude } from '../ai/claudeClient';
 import { logger } from '../../utils/logger';
+import { decrypt } from '../../utils/encryption';
+import { env } from '../../config/env';
 import type { TopicCategory } from '../../config/constants';
+import OpenAI from 'openai';
+
+const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
 /**
  * Memory Service — Vector DB for pattern recognition.
@@ -42,10 +47,18 @@ export async function generateSessionEmbedding(params: {
       return;
     }
 
-    // Generate semantic summary using Claude
+    // Generate semantic summary using Claude (decrypt raw content)
     const conversationText = messages
       .filter((m) => m.rawContent)
-      .map((m) => `[${m.senderRole}] ${m.rawContent}`)
+      .map((m) => {
+        let content: string;
+        try {
+          content = decrypt(m.rawContent!);
+        } catch {
+          content = m.rawContent!;
+        }
+        return `[${m.senderRole}] ${content}`;
+      })
       .join('\n');
 
     const summary = await callClaude({
@@ -78,19 +91,29 @@ RULES:
       emotionTags = ['unclassified'];
     }
 
-    // Find or create telemetry record
-    const telemetry = await prisma.sessionTelemetry.findFirst({
+    // Find telemetry record — required for FK constraint
+    let telemetry = await prisma.sessionTelemetry.findFirst({
       where: { anonymizedCoupleId },
       orderBy: { createdAt: 'desc' },
     });
 
-    const telemetryId = telemetry?.id || 'unknown';
+    // Create telemetry record if none exists (defensive)
+    if (!telemetry) {
+      telemetry = await prisma.sessionTelemetry.create({
+        data: {
+          anonymizedCoupleId,
+          sessionStartedAt: new Date(),
+          status: 'CLOSED',
+        },
+      });
+      logger.warn('Created missing telemetry record for embedding', { anonymizedCoupleId });
+    }
 
-    // Store embedding record (vector will be added via pgvector extension)
-    await prisma.sessionEmbedding.create({
+    // Store embedding record (vector added below via raw SQL)
+    const embedding = await prisma.sessionEmbedding.create({
       data: {
         anonymizedCoupleId,
-        sessionTelemetryId: telemetryId,
+        sessionTelemetryId: telemetry.id,
         summary,
         dominantEmotionTags: emotionTags,
         userRole,
@@ -104,9 +127,8 @@ RULES:
       emotionTags,
     });
 
-    // TODO: Generate actual vector embedding using text-embedding-3-small
-    // and store in pgvector column for similarity search.
-    // For MVP, we use text-based retrieval from SessionEmbedding.summary.
+    // Generate vector embedding and store via pgvector
+    await storeEmbeddingVector(embedding.id, summary);
   } catch (error) {
     logger.error('Failed to generate session embedding', {
       sessionId,
@@ -124,20 +146,42 @@ export async function retrievePatterns(params: {
   currentMessage: string;
   threshold?: number;
 }): Promise<string[]> {
-  const { anonymizedCoupleId } = params;
+  const { anonymizedCoupleId, currentMessage, threshold } = params;
+  const similarityThreshold = threshold ?? env.VECTOR_SIMILARITY_THRESHOLD;
 
   try {
-    // TODO: Implement proper vector similarity search with pgvector
-    // For MVP, retrieve latest 3 session summaries for this couple
+    // Generate embedding for the current message
+    const queryVector = await generateVector(currentMessage);
+
+    if (queryVector) {
+      // pgvector cosine similarity search — only for this couple (Anti-Stalker)
+      const vectorStr = `[${queryVector.join(',')}]`;
+      const results = await prisma.$queryRawUnsafe<Array<{ summary: string; similarity: number }>>(
+        `SELECT summary, 1 - (embedding <=> $1::vector) AS similarity
+         FROM session_embeddings
+         WHERE anonymized_couple_id = $2
+           AND embedding IS NOT NULL
+           AND 1 - (embedding <=> $1::vector) >= $3
+         ORDER BY similarity DESC
+         LIMIT 3`,
+        vectorStr,
+        anonymizedCoupleId,
+        similarityThreshold
+      );
+
+      if (results.length > 0) {
+        return results.map((r) => r.summary);
+      }
+    }
+
+    // Fallback: retrieve latest 3 session summaries by recency
     const embeddings = await prisma.sessionEmbedding.findMany({
       where: { anonymizedCoupleId },
       orderBy: { createdAt: 'desc' },
       take: 3,
-      select: { summary: true, dominantEmotionTags: true },
+      select: { summary: true },
     });
 
-    // Anti-Stalker filter: Only return patterns, not specific grievances
-    // The summaries are already generated with this constraint (see generateSessionEmbedding)
     return embeddings.map((e) => e.summary);
   } catch (error) {
     logger.error('Failed to retrieve patterns', {
@@ -145,6 +189,50 @@ export async function retrievePatterns(params: {
       error: error instanceof Error ? error.message : String(error),
     });
     return [];
+  }
+}
+
+/**
+ * Generate a vector embedding using OpenAI text-embedding-3-small.
+ * Returns null on failure (non-critical — falls back to recency).
+ */
+async function generateVector(text: string): Promise<number[] | null> {
+  try {
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text,
+    });
+    return response.data[0].embedding;
+  } catch (error) {
+    logger.error('Failed to generate vector embedding', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * Store a vector embedding in the pgvector column via raw SQL.
+ * Non-critical — if it fails, similarity search falls back to recency.
+ */
+async function storeEmbeddingVector(embeddingId: string, summary: string): Promise<void> {
+  try {
+    const vector = await generateVector(summary);
+    if (!vector) return;
+
+    const vectorStr = `[${vector.join(',')}]`;
+    await prisma.$executeRawUnsafe(
+      `UPDATE session_embeddings SET embedding = $1::vector WHERE id = $2`,
+      vectorStr,
+      embeddingId
+    );
+
+    logger.info('Vector embedding stored', { embeddingId });
+  } catch (error) {
+    logger.error('Failed to store vector embedding', {
+      embeddingId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

@@ -1,10 +1,23 @@
 import Stripe from 'stripe';
+import { Telegraf } from 'telegraf';
 import { env } from '../../config/env';
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
-import { decrypt } from '../../utils/encryption';
+import { hmacHash, decrypt } from '../../utils/encryption';
+import { SessionStateMachine } from '../../core/stateMachine/sessionStateMachine';
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+
+// Bot instance for sending notifications — set via setBotInstance()
+let botInstance: Telegraf | null = null;
+
+/**
+ * Set the bot instance for sending billing notifications.
+ * Called once during app startup.
+ */
+export function setBillingBotInstance(bot: Telegraf): void {
+  botInstance = bot;
+}
 
 /**
  * Verify and process Stripe webhook events.
@@ -102,15 +115,20 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
 
   for (const session of sessions) {
     if (session.status === 'LOCKED') {
-      // Unlock session — payment resolved
       try {
-        // Can't transition from LOCKED normally, so update directly
+        // LOCKED is terminal in the state machine, so direct update is necessary
+        // but we still log properly
         await prisma.coupleSession.update({
           where: { id: session.id },
-          data: { status: 'CLOSED' }, // Return to CLOSED, user can start new session
+          data: { status: 'CLOSED' },
         });
 
-        logger.info('Session unlocked after payment', { sessionId: session.id });
+        logger.info('Session state transition (payment unlock)', {
+          sessionId: session.id,
+          from: 'LOCKED',
+          to: 'CLOSED',
+          metadata: { reason: 'payment_succeeded' },
+        });
       } catch (error) {
         logger.error('Failed to unlock session', {
           sessionId: session.id,
@@ -140,8 +158,10 @@ async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
     });
   }
 
-  // TODO: Send friendly notification to billing owner about payment failure
-  // [BILLING REVIEW NEEDED] — notification mechanism to user about failed payment
+  // Notify billing owner about payment failure
+  await notifyBillingOwner(customerId,
+    '⚠️ התשלום נכשל. הסשנים הפעילים שלך ממשיכים לעבוד, אבל לא ניתן יהיה לפתוח סשנים חדשים עד שהתשלום יעודכן.\n\n💳 עדכן/י את אמצעי התשלום כדי להמשיך ליהנות מרות בוט זוגיות.'
+  );
 }
 
 async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
@@ -156,17 +176,18 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
   for (const session of sessions) {
     if (['ACTIVE', 'PAUSED', 'ASYNC_COACHING'].includes(session.status)) {
       try {
-        await prisma.coupleSession.update({
-          where: { id: session.id },
-          data: { status: 'LOCKED' },
+        await SessionStateMachine.transition(session.id, 'LOCKED', {
+          reason: 'subscription_deleted',
         });
 
         logger.info('Session locked due to subscription cancellation', {
           sessionId: session.id,
         });
 
-        // TODO: Notify both users about locked status with payment link
-        // [BILLING REVIEW NEEDED] — notification with payment link
+        // Notify both users about locked status
+        await notifySessionUsers(session.id,
+          '🔒 הסשן הועבר למצב קריאה בלבד בעקבות ביטול המנוי.\n\nכדי לחדש את הגישה, חדשו את המנוי.\nהנתונים שלכם נשמרים בבטחה.'
+        );
       } catch (error) {
         logger.error('Failed to lock session', {
           sessionId: session.id,
@@ -180,35 +201,90 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
 async function findSessionsByStripeCustomer(customerId: string): Promise<
   Array<{ id: string; status: string }>
 > {
-  // Find user with this Stripe customer ID (encrypted)
-  const allUsers = await prisma.user.findMany({
-    where: { stripeCustomerId: { not: null } },
-    select: { id: true, stripeCustomerId: true },
+  // O(1) lookup using HMAC hash
+  const hash = hmacHash(customerId);
+  const user = await prisma.user.findUnique({
+    where: { stripeCustomerIdHash: hash },
+    select: { id: true },
   });
 
-  let billingOwnerId: string | null = null;
-  for (const user of allUsers) {
-    if (user.stripeCustomerId) {
-      try {
-        if (decrypt(user.stripeCustomerId) === customerId) {
-          billingOwnerId = user.id;
-          break;
-        }
-      } catch {
-        continue;
-      }
-    }
-  }
-
-  if (!billingOwnerId) {
+  if (!user) {
     logger.warn('No user found for Stripe customer', { customerId });
     return [];
   }
+
+  const billingOwnerId = user.id;
 
   return prisma.coupleSession.findMany({
     where: { billingOwnerId },
     select: { id: true, status: true },
   });
+}
+
+/**
+ * Notify the billing owner (by Stripe customer ID) via Telegram.
+ */
+async function notifyBillingOwner(stripeCustomerId: string, message: string): Promise<void> {
+  if (!botInstance) {
+    logger.warn('Cannot send billing notification — bot instance not set');
+    return;
+  }
+
+  try {
+    const hash = hmacHash(stripeCustomerId);
+    const user = await prisma.user.findUnique({
+      where: { stripeCustomerIdHash: hash },
+      select: { telegramId: true },
+    });
+
+    if (!user) return;
+
+    const telegramId = decrypt(user.telegramId);
+    await botInstance.telegram.sendMessage(telegramId, message);
+  } catch (error) {
+    logger.error('Failed to send billing notification', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Notify both users in a session via Telegram.
+ */
+async function notifySessionUsers(sessionId: string, message: string): Promise<void> {
+  if (!botInstance) {
+    logger.warn('Cannot send session notification — bot instance not set');
+    return;
+  }
+
+  try {
+    const session = await prisma.coupleSession.findUnique({
+      where: { id: sessionId },
+      include: { userA: { select: { telegramId: true } }, userB: { select: { telegramId: true } } },
+    });
+
+    if (!session) return;
+
+    const userIds = [session.userA.telegramId];
+    if (session.userB) userIds.push(session.userB.telegramId);
+
+    for (const encryptedTelegramId of userIds) {
+      try {
+        const telegramId = decrypt(encryptedTelegramId);
+        await botInstance.telegram.sendMessage(telegramId, message);
+      } catch (sendError) {
+        logger.error('Failed to send notification to user', {
+          sessionId,
+          error: sendError instanceof Error ? sendError.message : String(sendError),
+        });
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to notify session users', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**

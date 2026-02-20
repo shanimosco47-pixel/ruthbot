@@ -2,6 +2,7 @@ import { Context, Markup } from 'telegraf';
 import { SessionManager } from '../../../core/stateMachine/sessionManager';
 import { SessionStateMachine } from '../../../core/stateMachine/sessionStateMachine';
 import { callClaude } from '../../../services/ai/claudeClient';
+import { requiresPayment } from '../../../services/billing/stripeService';
 import { logger } from '../../../utils/logger';
 import { splitMessage } from '../../../utils/telegramHelpers';
 import { decrypt } from '../../../utils/encryption';
@@ -18,6 +19,26 @@ const userStates = new Map<string, {
 }>();
 
 export { userStates, pendingReframes };
+
+/**
+ * Clean up all in-memory state for a given session.
+ * Called on session close, L4 hard stop, /start restart.
+ */
+export function cleanupSessionState(sessionId: string): void {
+  // Remove all pending reframes for this session
+  for (const [messageId, pending] of pendingReframes) {
+    if (pending.sessionId === sessionId) {
+      pendingReframes.delete(messageId);
+    }
+  }
+
+  // Remove all user states tied to this session
+  for (const [telegramId, state] of userStates) {
+    if (state.sessionId === sessionId) {
+      userStates.delete(telegramId);
+    }
+  }
+}
 
 /**
  * Handle all inline keyboard callback queries.
@@ -80,6 +101,19 @@ async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise
   const sessionId = await SessionManager.createSession(userId);
 
   logger.info('Disclaimer accepted, session created', { telegramId, sessionId });
+
+  // Payment gate: check if this non-trial session requires payment
+  const needsPayment = await requiresPayment(sessionId);
+  if (needsPayment) {
+    // [BILLING REVIEW NEEDED] — Stripe Checkout link generation
+    await ctx.reply(
+      '💳 הסשן הראשון שלך היה חינם. כדי להמשיך, צריך מנוי פעיל.\n\nלאחר התשלום, הקלד/י /start כדי להתחיל סשן חדש.',
+      Markup.inlineKeyboard([
+        [Markup.button.url('💳 לתשלום', 'https://couplebot.app/pricing')],
+      ])
+    );
+    return;
+  }
 
   // Ask: join partner now or work alone first? (Section 2.5, 1A)
   await ctx.reply(
@@ -188,7 +222,7 @@ async function handleTelegramCheck(ctx: Context, telegramId: string, data: strin
     const state = userStates.get(telegramId);
     const invitationMessage = (state?.data?.invitationMessage as string) || '';
 
-    const modifiedText = `היי, פתחתי לנו סשן ב-CoupleBot. חשוב לי שנדבר בצורה רגועה שמכבדת את שנינו.
+    const modifiedText = `היי, פתחתי לנו סשן ברות בוט זוגיות. חשוב לי שנדבר בצורה רגועה שמכבדת את שנינו.
 
 הבוט יושב בטלגרם כדי שהשיחה שלנו תהיה הכי פרטית ומאובטחת — לא בוואטסאפ, לא בהודעות רגילות.
 
@@ -244,10 +278,18 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
     select: { reframedContent: true },
   });
 
+  // Decrypt reframed content (stored encrypted at rest)
+  let reframedText = '';
   if (latestReframe?.reframedContent) {
+    try {
+      reframedText = decrypt(latestReframe.reframedContent);
+    } catch {
+      reframedText = latestReframe.reframedContent;
+    }
+
     // Deliver the reframe (Section 2.5, Phase 3, 3A)
     await ctx.reply(
-      `בן/בת הזוג שלך ביקש/ה להעביר לך את הדברים הבאים. ביקשתי ממנו/ממנה לנסח אותם בצורה שתאפשר לכם לדבר בצורה רגועה:\n\n— ${latestReframe.reframedContent} —`
+      `בן/בת הזוג שלך ביקש/ה להעביר לך את הדברים הבאים. ביקשתי ממנו/ממנה לנסח אותם בצורה שתאפשר לכם לדבר בצורה רגועה:\n\n— ${reframedText} —`
     );
   }
 
@@ -259,7 +301,7 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
   userStates.set(telegramId, {
     state: 'reflection_gate_step1',
     sessionId,
-    data: { reframedContent: latestReframe?.reframedContent || '' },
+    data: { reframedContent: reframedText },
   });
 }
 
@@ -420,7 +462,7 @@ async function handleEmailOptChoice(ctx: Context, telegramId: string, data: stri
     await ctx.reply('מה כתובת המייל שלך?');
     userStates.set(telegramId, { state: 'awaiting_email' });
   } else {
-    await ctx.reply('בסדר! הסיכום נשלח לך כאן בטלגרם. תודה שהשתמשת ב-CoupleBot ❤️');
+    await ctx.reply('בסדר! הסיכום נשלח לך כאן בטלגרם. תודה שהשתמשת ברות בוט זוגיות ❤️');
     userStates.delete(telegramId);
   }
 }

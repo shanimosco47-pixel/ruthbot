@@ -2,8 +2,10 @@ import { classifyRisk } from '../../services/risk/riskEngine';
 import { callClaude } from '../../services/ai/claudeClient';
 import { buildCoachingPrompt, buildReframePrompt, getEmergencyResources } from '../../services/ai/systemPrompts';
 import { SessionStateMachine } from '../stateMachine/sessionStateMachine';
+import { cleanupSessionState } from '../../adapters/telegram/handlers/callbackHandler';
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
+import { encrypt, decrypt } from '../../utils/encryption';
 import type { PipelineInput, PipelineResult, ConversationMessage, RiskAssessment } from '../../types';
 
 /**
@@ -35,13 +37,13 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     senderRole: context.currentRole,
   });
 
-  // Store message in DB
+  // Store message in DB (raw content encrypted at rest — Hat 4: Privacy)
   await prisma.message.create({
     data: {
       sessionId: context.sessionId,
       senderRole: context.currentRole,
       messageType: input.messageType,
-      rawContent: rawText, // TODO: [SAFETY REVIEW NEEDED] consider encrypting raw content
+      rawContent: encrypt(rawText),
       riskLevel: riskAssessment.risk_level,
       topicCategory: riskAssessment.topic_category,
     },
@@ -65,7 +67,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   // Step 4: Emotional Coaching
   // ================================================
   const conversationHistory = await getConversationHistory(context.sessionId);
-  const patternSummaries = await getPatternSummaries(context.anonymizedCoupleId);
+  const patternSummaries = await getPatternSummaries(context.anonymizedCoupleId, rawText);
 
   const coachingResponse = await callClaude({
     systemPrompt: buildCoachingPrompt({
@@ -110,13 +112,13 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     }
   }
 
-  // Store bot response as message
+  // Store bot response as message (encrypted at rest)
   await prisma.message.create({
     data: {
       sessionId: context.sessionId,
       senderRole: context.currentRole,
       messageType: 'COACHING',
-      rawContent: coachingResponse,
+      rawContent: encrypt(coachingResponse),
     },
   });
 
@@ -149,6 +151,8 @@ async function handleL4HardStop(
       reason: 'L4_hard_stop',
       riskReasoning: riskAssessment.reasoning,
     });
+    // Clean up all in-memory state for this session
+    cleanupSessionState(context.sessionId);
   } catch (error) {
     logger.error('Failed to lock session on L4', {
       sessionId: context.sessionId,
@@ -184,7 +188,7 @@ async function handleHighRisk(
   });
 
   const conversationHistory = await getConversationHistory(context.sessionId);
-  const patternSummaries = await getPatternSummaries(context.anonymizedCoupleId);
+  const patternSummaries = await getPatternSummaries(context.anonymizedCoupleId, rawText);
 
   // Generate coaching response for L3/L3_PLUS
   const coachingResponse = await callClaude({
@@ -232,28 +236,32 @@ async function getConversationHistory(sessionId: string): Promise<ConversationMe
 
   return messages
     .filter((m) => m.rawContent)
-    .map((m) => ({
-      role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
-      content: m.rawContent!,
-      timestamp: m.createdAt,
-    }));
+    .map((m) => {
+      let content: string;
+      try {
+        content = decrypt(m.rawContent!);
+      } catch {
+        // Fallback for messages stored before encryption was added
+        content = m.rawContent!;
+      }
+      return {
+        role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
+        content,
+        timestamp: m.createdAt,
+      };
+    });
 }
 
 /**
  * Get pattern summaries from vector DB for this couple.
- * Returns empty array if no patterns found.
+ * Uses semantic similarity search via pgvector.
  */
-async function getPatternSummaries(anonymizedCoupleId: string): Promise<string[]> {
-  // TODO: Implement vector similarity search once pgvector is set up (Phase 9)
-  // For now, return summaries from previous sessions
-  const embeddings = await prisma.sessionEmbedding.findMany({
-    where: { anonymizedCoupleId },
-    orderBy: { createdAt: 'desc' },
-    take: 3,
-    select: { summary: true },
+async function getPatternSummaries(anonymizedCoupleId: string, currentMessage?: string): Promise<string[]> {
+  const { retrievePatterns } = await import('../../services/memory/memoryService');
+  return retrievePatterns({
+    anonymizedCoupleId,
+    currentMessage: currentMessage || '',
   });
-
-  return embeddings.map((e) => e.summary);
 }
 
 /**

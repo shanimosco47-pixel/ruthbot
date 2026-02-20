@@ -4,9 +4,12 @@ import { logger } from '../../utils/logger';
 import { handleStart } from './handlers/startHandler';
 import { handleMessage } from './handlers/messageHandler';
 import { handleVoice } from './handlers/voiceHandler';
-import { handleCallbackQuery } from './handlers/callbackHandler';
+import { handleCallbackQuery, userStates, cleanupSessionState } from './handlers/callbackHandler';
 import { handleDeleteMyData } from './handlers/deleteHandler';
 import { withSessionLock } from '../../utils/sessionLock';
+import { SessionManager } from '../../core/stateMachine/sessionManager';
+import { SessionStateMachine } from '../../core/stateMachine/sessionStateMachine';
+import { orchestrateSessionClose } from '../../core/orchestrator/sessionCloseOrchestrator';
 
 export function createBot(): Telegraf {
   const bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
@@ -40,11 +43,45 @@ export function createBot(): Telegraf {
     });
   });
 
-  // /stop command
+  // /stop command — properly close session
   bot.command('stop', async (ctx) => {
-    await ctx.reply(
-      'הסשן נסגר. תודה שהשתמשת ב-CoupleBot. אפשר תמיד להתחיל מחדש עם /start'
-    );
+    const telegramId = ctx.from.id.toString();
+    const lockKey = `user:${telegramId}`;
+
+    await withSessionLock(lockKey, async () => {
+      const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from.first_name);
+      const activeSession = await SessionManager.getActiveSession(userId);
+
+      if (!activeSession) {
+        await ctx.reply('אין סשן פתוח.');
+        return;
+      }
+
+      try {
+        await SessionStateMachine.transition(activeSession.id, 'CLOSED', { reason: 'user_stop_command' });
+
+        // Trigger session close orchestration (summaries, email, telemetry)
+        orchestrateSessionClose(bot, activeSession.id).catch((error) => {
+          logger.error('Session close orchestration failed', {
+            sessionId: activeSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+
+        await ctx.reply('הסשן נסגר. תודה שהשתמשת ברות בוט זוגיות ❤️\nאפשר תמיד להתחיל מחדש עם /start');
+      } catch (error) {
+        logger.error('/stop transition failed', {
+          sessionId: activeSession.id,
+          status: activeSession.status,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await ctx.reply('לא ניתן לסגור את הסשן במצבו הנוכחי.');
+      }
+
+      // Clean up all in-memory state for this session and user
+      cleanupSessionState(activeSession.id);
+      userStates.delete(telegramId);
+    });
   });
 
   // Text messages

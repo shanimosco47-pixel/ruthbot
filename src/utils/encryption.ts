@@ -28,6 +28,14 @@ export function decrypt(encryptedText: string): string {
   return decrypted;
 }
 
+/**
+ * Generate a deterministic HMAC-SHA256 hash for lookup.
+ * Used to find encrypted records without decrypting every row.
+ */
+export function hmacHash(text: string): string {
+  return crypto.createHmac('sha256', getKey()).update(text).digest('hex');
+}
+
 export function generateInviteToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }

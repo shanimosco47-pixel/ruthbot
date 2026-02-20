@@ -1,6 +1,6 @@
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
-import { encrypt, decrypt, generateInviteToken, generateAnonymizedCoupleId } from '../../utils/encryption';
+import { encrypt, hmacHash, generateInviteToken, generateAnonymizedCoupleId } from '../../utils/encryption';
 import { SessionStateMachine } from './sessionStateMachine';
 import type { TtlOption } from '../../config/constants';
 
@@ -10,29 +10,21 @@ export class SessionManager {
    * Telegram ID is stored encrypted.
    */
   static async findOrCreateUser(telegramId: string, name?: string, language?: string): Promise<string> {
-    // Search by encrypted telegramId
-    const allUsers = await prisma.user.findMany({
-      select: { id: true, telegramId: true },
+    // O(1) lookup using deterministic HMAC hash
+    const hash = hmacHash(telegramId);
+    const existing = await prisma.user.findUnique({
+      where: { telegramIdHash: hash },
+      select: { id: true },
     });
 
-    // Decrypt and compare
-    for (const user of allUsers) {
-      try {
-        const decrypted = decrypt(user.telegramId);
-        if (decrypted === telegramId) {
-          // Update language if provided
-          if (language) {
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { language },
-            });
-          }
-          return user.id;
-        }
-      } catch {
-        // Decryption failed for this record — skip
-        continue;
+    if (existing) {
+      if (language) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { language },
+        });
       }
+      return existing.id;
     }
 
     // Create new user
@@ -42,6 +34,7 @@ export class SessionManager {
     const newUser = await prisma.user.create({
       data: {
         telegramId: encryptedTelegramId,
+        telegramIdHash: hash,
         name: encryptedName,
         language: language || 'he',
       },
@@ -80,6 +73,22 @@ export class SessionManager {
       userAId,
       isTrial: session.isTrial,
     });
+
+    // Create telemetry record
+    try {
+      await prisma.sessionTelemetry.create({
+        data: {
+          anonymizedCoupleId,
+          sessionStartedAt: new Date(),
+          status: 'INVITE_CRAFTING',
+        },
+      });
+    } catch (error) {
+      logger.error('Failed to create session telemetry', {
+        sessionId: session.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return session.id;
   }
@@ -164,37 +173,21 @@ export class SessionManager {
     }
 
     // Check if User B is already User A (same person clicking their own link)
-    const encryptedTelegramIdB = encrypt(telegramIdB);
-    try {
-      const decryptedA = decrypt(session.userA.telegramId);
-      if (decryptedA === telegramIdB) {
-        return { error: 'אי אפשר להצטרף לסשן שלך עצמך.' };
-      }
-    } catch {
-      // Continue — decryption issue is not a blocker
+    const hashB = hmacHash(telegramIdB);
+    if (session.userA.telegramIdHash === hashB) {
+      return { error: 'אי אפשר להצטרף לסשן שלך עצמך.' };
     }
 
     // Check if User B is already in this session
     if (session.userBId) {
-      // Check if this Telegram ID is already User B
-      const allUsers = await prisma.user.findMany({
+      const existingB = await prisma.user.findUnique({
         where: { id: session.userBId },
-        select: { id: true, telegramId: true },
+        select: { telegramIdHash: true },
       });
-
-      for (const u of allUsers) {
-        try {
-          if (decrypt(u.telegramId) === telegramIdB) {
-            return { error: 'אתה/את כבר חלק מהסשן הזה.' };
-          }
-        } catch {
-          continue;
-        }
+      if (existingB?.telegramIdHash === hashB) {
+        return { error: 'אתה/את כבר חלק מהסשן הזה.' };
       }
     }
-
-    // Suppress unused variable warning
-    void encryptedTelegramIdB;
 
     // Mark token as used (but DON'T store User B data yet — GDPR: wait for consent)
     await prisma.coupleSession.update({

@@ -7,10 +7,12 @@ import { buildInvitationDraftPrompt, buildMirrorEvaluationPrompt } from '../../.
 import { logger } from '../../../utils/logger';
 import { detectLanguage, splitMessage } from '../../../utils/telegramHelpers';
 import { prisma } from '../../../db/client';
-import { encrypt } from '../../../utils/encryption';
+import { encrypt, decrypt } from '../../../utils/encryption';
 import { MAX_REFLECTION_REPROMPTS } from '../../../config/constants';
+import { sendSessionSummaryEmail } from '../../../services/email/emailService';
 import { userStates, pendingReframes } from './callbackHandler';
 import type { MirrorEvaluation, SessionContext, PendingReframe } from '../../../types';
+import type { TopicCategory } from '../../../config/constants';
 
 /**
  * Handle incoming text messages.
@@ -68,19 +70,17 @@ export async function handleMessage(ctx: Context): Promise<void> {
     return;
   }
 
-  // Detect language and update
-  const language = detectLanguage(text);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { language },
-  });
+  // Detect language — only update if message has enough content to be reliable
+  const language = text.replace(/\s/g, '').length >= 10 ? detectLanguage(text) : 'he';
 
-  // Route to coaching or pipeline based on session status
+  // Fetch full session to get both user IDs
+  const fullSession = await SessionManager.getSession(activeSession.id);
+
   const sessionContext: SessionContext = {
     sessionId: activeSession.id,
     anonymizedCoupleId: activeSession.anonymizedCoupleId,
-    userAId: userId,
-    userBId: null, // Will be filled from session
+    userAId: fullSession?.userAId || userId,
+    userBId: fullSession?.userBId || null,
     currentUserId: userId,
     currentRole: activeSession.role,
     status: activeSession.status,
@@ -145,9 +145,21 @@ function parseDrafts(response: string): string[] {
     return [parts[1].trim(), parts[2].trim()];
   }
 
-  // Fallback: split in half
-  const midpoint = Math.floor(response.length / 2);
-  return [response.substring(0, midpoint).trim(), response.substring(midpoint).trim()];
+  // Try numbered "1." / "2." format
+  const numberedParts = response.split(/\n\s*2\.\s*/);
+  if (numberedParts.length >= 2) {
+    const first = numberedParts[0].replace(/^\s*1\.\s*/, '').trim();
+    return [first, numberedParts[1].trim()];
+  }
+
+  // Try double newline split
+  const paragraphs = response.split(/\n\n+/).filter((p) => p.trim().length > 0);
+  if (paragraphs.length >= 2) {
+    return [paragraphs[0].trim(), paragraphs.slice(1).join('\n\n').trim()];
+  }
+
+  // Final fallback: use same text for both (user can regenerate)
+  return [response.trim(), response.trim()];
 }
 
 // ============================================
@@ -359,8 +371,8 @@ async function handleActiveSessionMessage(
           sessionId: sessionContext.sessionId,
           senderRole: sessionContext.currentRole,
           messageType: 'REFRAME',
-          reframedContent: result.reframedMessage,
-          rawContent: text,
+          reframedContent: encrypt(result.reframedMessage),
+          rawContent: encrypt(text),
           riskLevel: result.riskLevel,
           topicCategory: result.topicCategory,
         },
@@ -496,8 +508,99 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
     data: { email: encrypt(email) },
   });
 
-  await ctx.reply('📧 הסיכום יישלח למייל שלך בקרוב. תודה! ❤️');
+  await ctx.reply('📧 שולח את הסיכום למייל... רגע 🕐');
 
-  // TODO: Trigger actual email sending via Resend
+  // Find the most recent closed session for this user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true },
+  });
+  const session = await prisma.coupleSession.findFirst({
+    where: {
+      OR: [{ userAId: userId }, { userBId: userId }],
+      status: 'CLOSED',
+    },
+    orderBy: { closedAt: 'desc' },
+    include: { riskEvents: true },
+  });
+
+  if (!session) {
+    await ctx.reply('📧 הסיכום יישלח כשהסשן ייסגר. תודה! ❤️');
+    userStates.delete(telegramId);
+    return;
+  }
+
+  // Get session summary from telemetry
+  const topicCategory = (session.riskEvents[0]?.topicCategory || 'משהו שחשוב לי לשתף') as TopicCategory;
+  const userRole = session.userAId === userId ? 'USER_A' : 'USER_B';
+
+  // Generate summary for email
+  const { callClaudeJSON } = await import('../../../services/ai/claudeClient');
+  const { buildSessionSummaryPrompt } = await import('../../../services/ai/systemPrompts');
+
+  const messages = await prisma.message.findMany({
+    where: { sessionId: session.id },
+    orderBy: { createdAt: 'asc' },
+    select: { senderRole: true, rawContent: true, messageType: true, createdAt: true },
+  });
+
+  const conversationHistory = messages
+    .filter((m) => m.rawContent)
+    .map((m) => {
+      let content: string;
+      try {
+        content = decrypt(m.rawContent!);
+      } catch {
+        content = m.rawContent!;
+      }
+      return {
+        role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
+        content,
+        timestamp: m.createdAt,
+      };
+    });
+
+  let summary: { personalSummary: string; sharedCommitments: string; encouragement: string };
+  try {
+    summary = await callClaudeJSON<{ personalSummary: string; sharedCommitments: string; encouragement: string }>({
+      systemPrompt: buildSessionSummaryPrompt({
+        userRole,
+        conversationHistory,
+        language: 'he',
+        topicCategory,
+      }),
+      userMessage: 'Generate the session summary.',
+      sessionId: session.id,
+    });
+  } catch {
+    summary = {
+      personalSummary: 'הסשן הסתיים. תודה שהשתתפת.',
+      sharedCommitments: 'לא זוהו מחויבויות ספציפיות בסשן זה.',
+      encouragement: 'כל שיחה היא צעד קדימה. אתם בדרך הנכונה. ❤️',
+    };
+  }
+
+  const userName = user?.name ? decrypt(user.name) : ctx.from?.first_name || 'שם לא ידוע';
+  const sessionDate = session.closedAt
+    ? session.closedAt.toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' })
+    : new Date().toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const sent = await sendSessionSummaryEmail({
+    to: email,
+    userName,
+    sessionDate,
+    personalSummary: summary.personalSummary,
+    sharedCommitments: summary.sharedCommitments,
+    encouragement: summary.encouragement,
+    topicCategory,
+    ctaUrl: 'https://t.me/RuthCoupleBot',
+  });
+
+  if (sent) {
+    await ctx.reply('📧 הסיכום נשלח למייל שלך בהצלחה! תודה ❤️');
+  } else {
+    await ctx.reply('לא הצלחנו לשלוח את המייל. ניתן לנסות שוב מאוחר יותר.');
+  }
+
   userStates.delete(telegramId);
 }

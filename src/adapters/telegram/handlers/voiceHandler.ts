@@ -39,9 +39,9 @@ export async function handleVoice(ctx: Context): Promise<void> {
   let filePath: string | null = null;
 
   try {
-    // Download voice file
-    const file = await ctx.telegram.getFile(voice.file_id);
-    const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+    // Download voice file — use Telegraf's built-in URL builder
+    const fileLink = await ctx.telegram.getFileLink(voice.file_id);
+    const fileUrl = fileLink.toString();
 
     filePath = await downloadVoiceFile({
       fileUrl,

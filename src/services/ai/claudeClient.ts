@@ -3,8 +3,11 @@ import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import { CLAUDE_MAX_RETRIES, CLAUDE_INITIAL_RETRY_DELAY_MS } from '../../config/constants';
 
+const CLAUDE_REQUEST_TIMEOUT_MS = 30_000; // 30 seconds per request
+
 const client = new Anthropic({
   apiKey: env.ANTHROPIC_API_KEY,
+  timeout: CLAUDE_REQUEST_TIMEOUT_MS,
 });
 
 function sleep(ms: number): Promise<void> {

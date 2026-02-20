@@ -14,11 +14,13 @@ datasource db {
 model User {
   id                String   @id @default(uuid())
   telegramId        String   @unique @map("telegram_id") // AES-256 encrypted
+  telegramIdHash    String   @unique @map("telegram_id_hash") // HMAC-SHA256 for O(1) lookup
   name              String?  // AES-256 encrypted
   email             String?  // AES-256 encrypted
   emailOptedOut     Boolean  @default(false) @map("email_opted_out")
   language          String   @default("he") // detected language
-  stripeCustomerId  String?  @map("stripe_customer_id") // AES-256 encrypted
+  stripeCustomerId     String?  @map("stripe_customer_id") // AES-256 encrypted
+  stripeCustomerIdHash String?  @unique @map("stripe_customer_id_hash") // HMAC for lookup
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

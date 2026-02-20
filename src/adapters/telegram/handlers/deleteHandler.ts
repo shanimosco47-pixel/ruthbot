@@ -1,6 +1,6 @@
 import { Context, Markup } from 'telegraf';
 import { prisma } from '../../../db/client';
-import { decrypt } from '../../../utils/encryption';
+import { hmacHash } from '../../../utils/encryption';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -24,20 +24,14 @@ export async function handleDeleteMyData(ctx: Context): Promise<void> {
  */
 export async function handleDeleteConfirmation(ctx: Context, telegramId: string): Promise<void> {
   try {
-    // Find the user
-    const allUsers = await prisma.user.findMany();
-    let targetUserId: string | null = null;
+    // O(1) lookup using HMAC hash
+    const hash = hmacHash(telegramId);
+    const targetUser = await prisma.user.findUnique({
+      where: { telegramIdHash: hash },
+      select: { id: true },
+    });
 
-    for (const user of allUsers) {
-      try {
-        if (decrypt(user.telegramId) === telegramId) {
-          targetUserId = user.id;
-          break;
-        }
-      } catch {
-        continue;
-      }
-    }
+    const targetUserId = targetUser?.id || null;
 
     if (!targetUserId) {
       await ctx.reply('לא נמצאו נתונים למחיקה.');
@@ -101,7 +95,7 @@ export async function handleDeleteConfirmation(ctx: Context, telegramId: string)
     logger.info('User data deleted (GDPR)', { userId: targetUserId });
 
     await ctx.reply(
-      '✅ הנתונים האישיים שלך נמחקו.\n\nנתונים אנונימיים (ללא פרטים מזהים) נשמרים לשיפור השירות.\n\nתודה שהשתמשת ב-CoupleBot. ❤️'
+      '✅ הנתונים האישיים שלך נמחקו.\n\nנתונים אנונימיים (ללא פרטים מזהים) נשמרים לשיפור השירות.\n\nתודה שהשתמשת ברות בוט זוגיות. ❤️'
     );
   } catch (error) {
     logger.error('Data deletion failed', {

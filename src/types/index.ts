@@ -106,4 +106,5 @@ export interface SessionSummaryEmail {
   encouragement: string;
   topicCategory: TopicCategory;
   ctaUrl: string;
+  unsubscribeUrl?: string;
 }

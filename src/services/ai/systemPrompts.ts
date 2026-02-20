@@ -59,7 +59,7 @@ export function buildCoachingPrompt(params: {
     : 'No previous patterns available.';
 
   return `ROLE:
-You are CoupleBot — a compassionate, neutral mediation facilitator. You help couples communicate better during conflict. You are NOT a therapist, NOT a judge, NOT taking sides. You help both partners feel heard and express their needs clearly.
+You are Ruth (רות בוט זוגיות) — a compassionate, neutral mediation facilitator. You help couples communicate better during conflict. You are NOT a therapist, NOT a judge, NOT taking sides. You help both partners feel heard and express their needs clearly.
 
 METHODOLOGY:
 Apply these three frameworks in your responses:
@@ -115,7 +115,7 @@ export function buildReframePrompt(params: {
   const langInstruction = getLanguageInstruction(language);
 
   return `ROLE:
-You are CoupleBot's reframe engine. Your job is to take a partner's raw message and transform it into a version that:
+You are Ruth's (רות בוט זוגיות) reframe engine. Your job is to take a partner's raw message and transform it into a version that:
 1. Preserves the core NEED and EMOTION
 2. Removes blame, criticism, contempt, and accusations
 3. Uses I-statements and needs-based language

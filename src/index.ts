@@ -1,19 +1,24 @@
 import { env } from './config/env';
 import { createBot } from './adapters/telegram/bot';
-import { handleStripeWebhook } from './services/billing/stripeService';
+import { handleStripeWebhook, setBillingBotInstance } from './services/billing/stripeService';
 import { SessionStateMachine } from './core/stateMachine/sessionStateMachine';
 import { prisma } from './db/client';
 import { logger } from './utils/logger';
+import { decrypt } from './utils/encryption';
+import { Telegraf } from 'telegraf';
 import http from 'http';
 
 async function main(): Promise<void> {
-  logger.info('CoupleBot starting...', {
+  logger.info('RuthBot starting...', {
     nodeEnv: env.NODE_ENV,
     model: env.CLAUDE_MODEL,
   });
 
   // Create bot
   const bot = createBot();
+
+  // Set bot instance for billing notifications
+  setBillingBotInstance(bot);
 
   // Create HTTP server for Stripe webhooks
   const server = http.createServer(async (req, res) => {
@@ -47,7 +52,7 @@ async function main(): Promise<void> {
   });
 
   // Start periodic tasks
-  startPeriodicTasks();
+  startPeriodicTasks(bot);
 
   // Launch bot
   if (env.NODE_ENV === 'production' && env.WEBHOOK_URL) {
@@ -95,7 +100,7 @@ async function main(): Promise<void> {
     });
 
     server.listen(env.PORT, () => {
-      logger.info(`CoupleBot running in webhook mode on port ${env.PORT}`);
+      logger.info(`RuthBot running in webhook mode on port ${env.PORT}`);
     });
   } else {
     // Polling mode for development
@@ -104,7 +109,7 @@ async function main(): Promise<void> {
     });
 
     await bot.launch();
-    logger.info('CoupleBot running in polling mode (development)');
+    logger.info('RuthBot running in polling mode (development)');
   }
 
   // Graceful shutdown
@@ -123,13 +128,13 @@ async function main(): Promise<void> {
 /**
  * Periodic background tasks.
  */
-function startPeriodicTasks(): void {
+function startPeriodicTasks(bot: Telegraf): void {
   // Auto-close expired sessions (every 5 minutes)
   setInterval(async () => {
     try {
-      const closed = await SessionStateMachine.closeExpiredSessions(env.SESSION_EXPIRY_HOURS);
-      if (closed > 0) {
-        logger.info(`Periodic task: closed ${closed} expired sessions`);
+      const closedCount = await SessionStateMachine.closeExpiredSessions(env.SESSION_EXPIRY_HOURS);
+      if (closedCount > 0) {
+        logger.info(`Periodic task: closed ${closedCount} expired sessions`);
       }
     } catch (error) {
       logger.error('Periodic task error', {
@@ -159,8 +164,25 @@ function startPeriodicTasks(): void {
 
         logger.info('Invite token expired', { sessionId: session.id });
 
-        // TODO: Notify User A that the link expired
-        // This requires access to the bot instance to send messages
+        // Notify User A that the invite link expired
+        try {
+          const userA = await prisma.user.findUnique({
+            where: { id: session.userAId },
+            select: { telegramId: true },
+          });
+          if (userA) {
+            const telegramIdA = decrypt(userA.telegramId);
+            await bot.telegram.sendMessage(
+              telegramIdA,
+              '⏰ הלינק שיצרת פג תוקף. אפשר ליצור לינק חדש עם /start או לשלוח "הזמן את בן/בת הזוג".'
+            );
+          }
+        } catch (notifyError) {
+          logger.error('Failed to notify User A about expired token', {
+            sessionId: session.id,
+            error: notifyError instanceof Error ? notifyError.message : String(notifyError),
+          });
+        }
       }
     } catch (error) {
       logger.error('Token expiry check error', {
@@ -168,6 +190,36 @@ function startPeriodicTasks(): void {
       });
     }
   }, 60 * 1000);
+
+  // Auto-close idle sessions (every 5 minutes)
+  setInterval(async () => {
+    try {
+      const idleThreshold = new Date(Date.now() - env.IDLE_TIMEOUT_MINUTES * 60 * 1000);
+      const idleSessions = await prisma.coupleSession.findMany({
+        where: {
+          status: 'ACTIVE',
+          updatedAt: { lt: idleThreshold },
+        },
+        select: { id: true, anonymizedCoupleId: true },
+      });
+
+      for (const session of idleSessions) {
+        try {
+          await SessionStateMachine.transition(session.id, 'PAUSED', { reason: 'idle_timeout' });
+          logger.info('Session paused due to idle timeout', { sessionId: session.id });
+        } catch (transitionError) {
+          logger.error('Failed to pause idle session', {
+            sessionId: session.id,
+            error: transitionError instanceof Error ? transitionError.message : String(transitionError),
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Idle timeout check error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, 5 * 60 * 1000);
 }
 
 main().catch((error) => {

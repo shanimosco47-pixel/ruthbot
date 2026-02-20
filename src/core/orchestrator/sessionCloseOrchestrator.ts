@@ -45,14 +45,23 @@ export async function orchestrateSessionClose(
     return;
   }
 
-  // Get conversation history
+  // Get conversation history (decrypt raw content)
   const conversationHistory: ConversationMessage[] = session.messages
     .filter((m) => m.rawContent)
-    .map((m) => ({
-      role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
-      content: m.rawContent!,
-      timestamp: m.createdAt,
-    }));
+    .map((m) => {
+      let content: string;
+      try {
+        content = decrypt(m.rawContent!);
+      } catch {
+        // Fallback for messages stored before encryption was added
+        content = m.rawContent!;
+      }
+      return {
+        role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
+        content,
+        timestamp: m.createdAt,
+      };
+    });
 
   // Determine topic category
   const topicCategory = (session.riskEvents[0]?.topicCategory || 'משהו שחשוב לי לשתף') as TopicCategory;
