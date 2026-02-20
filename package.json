@@ -1,0 +1,35 @@
+{
+  "name": "couplebot",
+  "version": "0.1.0",
+  "description": "AI-powered mediation assistant for couples in conflict - Telegram bot",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint src/ --ext .ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@prisma/client": "^5.22.0",
+    "stripe": "^17.3.0",
+    "dotenv": "^16.4.5",
+    "openai": "^4.73.0",
+    "resend": "^4.0.0",
+    "telegraf": "^4.16.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "prisma": "^5.22.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

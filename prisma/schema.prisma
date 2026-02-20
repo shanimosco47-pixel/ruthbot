@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// PII LAYER — Encrypted sensitive data
+// ============================================
+
+model User {
+  id                String   @id @default(uuid())
+  telegramId        String   @unique @map("telegram_id") // AES-256 encrypted
+  name              String?  // AES-256 encrypted
+  email             String?  // AES-256 encrypted
+  emailOptedOut     Boolean  @default(false) @map("email_opted_out")
+  language          String   @default("he") // detected language
+  stripeCustomerId  String?  @map("stripe_customer_id") // AES-256 encrypted
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sessionsAsUserA   CoupleSession[] @relation("UserA")
+  sessionsAsUserB   CoupleSession[] @relation("UserB")
+  billingOwner      CoupleSession[] @relation("BillingOwner")
+
+  @@map("users")
+}
+
+model CoupleSession {
+  id                      String         @id @default(uuid())
+  anonymizedCoupleId      String         @map("anonymized_couple_id") // link to telemetry
+  userAId                 String         @map("user_a_id")
+  userBId                 String?        @map("user_b_id") // null until B joins
+  billingOwnerId          String?        @map("billing_owner_id")
+  status                  SessionStatus  @default(INVITE_CRAFTING)
+  isTrial                 Boolean        @default(true) @map("is_trial")
+
+  // Invitation fields
+  invitationMessage       String?        @map("invitation_message")
+  inviteTtlHours          Float?         @map("invite_ttl_hours")
+  partnerHasTelegram      Boolean?       @map("partner_has_telegram")
+  invitationVariant       String?        @map("invitation_variant") // 'standard' | 'no_telegram'
+  partnerJoined           Boolean        @default(false) @map("partner_joined")
+  mirrorAttempts          Int            @default(0) @map("mirror_attempts")
+
+  // Token
+  inviteToken             String?        @unique @map("invite_token")
+  inviteTokenUsed         Boolean        @default(false) @map("invite_token_used")
+  inviteTokenExpiresAt    DateTime?      @map("invite_token_expires_at")
+
+  // Timestamps
+  createdAt               DateTime       @default(now()) @map("created_at")
+  updatedAt               DateTime       @updatedAt @map("updated_at")
+  closedAt                DateTime?      @map("closed_at")
+
+  // Relations
+  userA                   User           @relation("UserA", fields: [userAId], references: [id])
+  userB                   User?          @relation("UserB", fields: [userBId], references: [id])
+  billingOwner            User?          @relation("BillingOwner", fields: [billingOwnerId], references: [id])
+  messages                Message[]
+  riskEvents              RiskEvent[]
+
+  @@map("couple_sessions")
+}
+
+model Message {
+  id              String        @id @default(uuid())
+  sessionId       String        @map("session_id")
+  senderRole      SenderRole    @map("sender_role") // USER_A or USER_B
+  messageType     MessageType   @map("message_type")
+  rawContent      String?       @map("raw_content") // encrypted, original message
+  reframedContent String?       @map("reframed_content") // AI-reframed version
+  approved        Boolean       @default(false)
+  delivered       Boolean       @default(false)
+  riskLevel       String?       @map("risk_level")
+  topicCategory   String?       @map("topic_category")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  session         CoupleSession @relation(fields: [sessionId], references: [id])
+
+  @@map("messages")
+}
+
+model RiskEvent {
+  id              String        @id @default(uuid())
+  sessionId       String        @map("session_id")
+  senderRole      SenderRole    @map("sender_role")
+  riskLevel       String        @map("risk_level")
+  topicCategory   String?       @map("topic_category")
+  reasoning       String?
+  actionRequired  String?       @map("action_required")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  session         CoupleSession @relation(fields: [sessionId], references: [id])
+
+  @@map("risk_events")
+}
+
+// ============================================
+// TELEMETRY LAYER — Anonymized data
+// ============================================
+
+model SessionTelemetry {
+  id                    String   @id @default(uuid())
+  anonymizedCoupleId    String   @map("anonymized_couple_id")
+  sessionStartedAt      DateTime @map("session_started_at")
+  sessionClosedAt       DateTime? @map("session_closed_at")
+  status                String
+  topicCategory         String?  @map("topic_category")
+  mirrorAttempts        Int      @default(0) @map("mirror_attempts")
+  partnerJoined         Boolean  @default(false) @map("partner_joined")
+  invitationVariant     String?  @map("invitation_variant")
+  inviteTtlHours        Float?   @map("invite_ttl_hours")
+  partnerHasTelegram    Boolean? @map("partner_has_telegram")
+  emotionScoreStart     Int?     @map("emotion_score_start") // 1-5
+  emotionScoreEnd       Int?     @map("emotion_score_end")   // 1-5
+  messageCount          Int      @default(0) @map("message_count")
+  riskEventsCount       Int      @default(0) @map("risk_events_count")
+  maxRiskLevel          String?  @map("max_risk_level")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("session_telemetry")
+}
+
+model SessionEmbedding {
+  id                    String   @id @default(uuid())
+  anonymizedCoupleId    String   @map("anonymized_couple_id")
+  sessionTelemetryId    String   @map("session_telemetry_id")
+  summary               String   // semantic summary, no PII
+  dominantEmotionTags   String[] @map("dominant_emotion_tags")
+  userRole              String   @map("user_role") // A or B
+  // vector field added via raw SQL migration for pgvector
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("session_embeddings")
+}
+
+model StripeEvent {
+  id              String   @id @default(uuid())
+  stripeEventId   String   @unique @map("stripe_event_id") // idempotency
+  eventType       String   @map("event_type")
+  processed       Boolean  @default(false)
+  processedAt     DateTime? @map("processed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("stripe_events")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum SessionStatus {
+  INVITE_CRAFTING
+  INVITE_PENDING
+  PENDING_PARTNER_CONSENT
+  REFLECTION_GATE
+  ACTIVE
+  ASYNC_COACHING
+  PAUSED
+  CLOSED
+  LOCKED
+  PARTNER_DECLINED
+}
+
+enum SenderRole {
+  USER_A
+  USER_B
+}
+
+enum MessageType {
+  TEXT
+  VOICE
+  SYSTEM
+  REFRAME
+  COACHING
+}
