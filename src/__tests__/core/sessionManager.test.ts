@@ -54,7 +54,10 @@ import { SessionManager } from '../../core/stateMachine/sessionManager';
 
 describe('SessionManager', () => {
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
+    // Reset findFirst specifically to clear mockResolvedValueOnce queue
+    mockSessionFindFirst.mockReset();
   });
 
   // ============================================
@@ -194,10 +197,7 @@ describe('SessionManager', () => {
     });
 
     it('should return error for already-used token', async () => {
-      jest.spyOn(
-        require('../../db/client').prisma.coupleSession,
-        'findFirst'
-      ).mockResolvedValue({
+      mockSessionFindFirst.mockResolvedValue({
         id: 'session-1',
         inviteTokenUsed: true,
         inviteTokenExpiresAt: new Date(Date.now() + 3600000),
@@ -214,10 +214,7 @@ describe('SessionManager', () => {
     });
 
     it('should return error for expired token', async () => {
-      jest.spyOn(
-        require('../../db/client').prisma.coupleSession,
-        'findFirst'
-      ).mockResolvedValue({
+      mockSessionFindFirst.mockResolvedValue({
         id: 'session-1',
         inviteTokenUsed: false,
         inviteTokenExpiresAt: new Date(Date.now() - 3600000), // expired 1 hour ago
@@ -234,10 +231,7 @@ describe('SessionManager', () => {
     });
 
     it('should return error when User B is same as User A', async () => {
-      jest.spyOn(
-        require('../../db/client').prisma.coupleSession,
-        'findFirst'
-      ).mockResolvedValue({
+      mockSessionFindFirst.mockResolvedValue({
         id: 'session-1',
         inviteTokenUsed: false,
         inviteTokenExpiresAt: new Date(Date.now() + 3600000),

@@ -12,6 +12,8 @@ const config: Config = {
   setupFiles: ['<rootDir>/src/__tests__/setup.ts'],
   // Clear mocks between tests
   clearMocks: true,
+  // Increase worker memory to avoid OOM on large SDK imports
+  workerIdleMemoryLimit: '512MB',
   // Coverage configuration
   collectCoverageFrom: [
     'src/**/*.ts',
