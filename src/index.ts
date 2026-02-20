@@ -2,6 +2,7 @@ import { env } from './config/env';
 import { createBot } from './adapters/telegram/bot';
 import { handleStripeWebhook, setBillingBotInstance } from './services/billing/stripeService';
 import { SessionStateMachine } from './core/stateMachine/sessionStateMachine';
+import { orchestrateSessionClose } from './core/orchestrator/sessionCloseOrchestrator';
 import { prisma } from './db/client';
 import { logger } from './utils/logger';
 import { decrypt } from './utils/encryption';
@@ -129,12 +130,29 @@ async function main(): Promise<void> {
  * Periodic background tasks.
  */
 function startPeriodicTasks(bot: Telegraf): void {
-  // Auto-close expired sessions (every 5 minutes)
+  // Auto-close expired PAUSED sessions (every 5 minutes)
   setInterval(async () => {
     try {
       const closedCount = await SessionStateMachine.closeExpiredSessions(env.SESSION_EXPIRY_HOURS);
       if (closedCount > 0) {
         logger.info(`Periodic task: closed ${closedCount} expired sessions`);
+
+        // Trigger session close orchestration for auto-closed sessions
+        const recentlyClosed = await prisma.coupleSession.findMany({
+          where: {
+            status: 'CLOSED',
+            closedAt: { gte: new Date(Date.now() - 6 * 60 * 1000) },
+          },
+          select: { id: true },
+        });
+        for (const session of recentlyClosed) {
+          orchestrateSessionClose(bot, session.id).catch((err) => {
+            logger.error('Session close orchestration failed', {
+              sessionId: session.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+        }
       }
     } catch (error) {
       logger.error('Periodic task error', {
@@ -156,7 +174,6 @@ function startPeriodicTasks(bot: Telegraf): void {
       });
 
       for (const session of expired) {
-        // Invalidate token
         await prisma.coupleSession.update({
           where: { id: session.id },
           data: { inviteTokenUsed: true },
@@ -164,7 +181,6 @@ function startPeriodicTasks(bot: Telegraf): void {
 
         logger.info('Invite token expired', { sessionId: session.id });
 
-        // Notify User A that the invite link expired
         try {
           const userA = await prisma.user.findUnique({
             where: { id: session.userAId },
@@ -191,7 +207,7 @@ function startPeriodicTasks(bot: Telegraf): void {
     }
   }, 60 * 1000);
 
-  // Auto-close idle sessions (every 5 minutes)
+  // Auto-pause idle ACTIVE sessions (every 5 minutes)
   setInterval(async () => {
     try {
       const idleThreshold = new Date(Date.now() - env.IDLE_TIMEOUT_MINUTES * 60 * 1000);
@@ -200,13 +216,16 @@ function startPeriodicTasks(bot: Telegraf): void {
           status: 'ACTIVE',
           updatedAt: { lt: idleThreshold },
         },
-        select: { id: true, anonymizedCoupleId: true },
+        select: { id: true, userAId: true, userBId: true },
       });
 
       for (const session of idleSessions) {
         try {
           await SessionStateMachine.transition(session.id, 'PAUSED', { reason: 'idle_timeout' });
           logger.info('Session paused due to idle timeout', { sessionId: session.id });
+
+          // Send idle reminder to both users
+          await sendIdleReminder(bot, session, 'הסשן הועבר להשהיה בגלל חוסר פעילות.\n\nתוכלו לחזור בכל שלב — פשוט שלחו הודעה כדי להמשיך.');
         } catch (transitionError) {
           logger.error('Failed to pause idle session', {
             sessionId: session.id,
@@ -220,6 +239,118 @@ function startPeriodicTasks(bot: Telegraf): void {
       });
     }
   }, 5 * 60 * 1000);
+
+  // Auto-decline PENDING_PARTNER_CONSENT sessions after 15 min (every 2 minutes)
+  setInterval(async () => {
+    try {
+      const consentTimeout = new Date(Date.now() - 15 * 60 * 1000);
+      const pendingConsent = await prisma.coupleSession.findMany({
+        where: {
+          status: 'PENDING_PARTNER_CONSENT',
+          updatedAt: { lt: consentTimeout },
+        },
+        select: { id: true, userAId: true },
+      });
+
+      for (const session of pendingConsent) {
+        try {
+          await SessionStateMachine.transition(session.id, 'PARTNER_DECLINED', {
+            reason: 'consent_timeout_15min',
+          });
+          logger.info('Partner consent timed out — auto-declined', { sessionId: session.id });
+
+          // Notify User A
+          const userA = await prisma.user.findUnique({
+            where: { id: session.userAId },
+            select: { telegramId: true },
+          });
+          if (userA) {
+            const telegramIdA = decrypt(userA.telegramId);
+            await bot.telegram.sendMessage(
+              telegramIdA,
+              'בן/בת הזוג לא אישר/ה הצטרפות תוך 15 דקות.\n\nמה תרצה לעשות?',
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🔄 שלח תזכורת', callback_data: `partner_declined:reminder:${session.id}` }],
+                    [{ text: '🧘 להמשיך לבד', callback_data: `partner_declined:solo:${session.id}` }],
+                    [{ text: '❌ סגור סשן', callback_data: `partner_declined:close:${session.id}` }],
+                  ],
+                },
+              }
+            );
+          }
+        } catch (transitionError) {
+          logger.error('Failed to auto-decline partner consent', {
+            sessionId: session.id,
+            error: transitionError instanceof Error ? transitionError.message : String(transitionError),
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Partner consent timeout check error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, 2 * 60 * 1000);
+
+  // Send reminders to PAUSED sessions before auto-close (every 5 minutes)
+  setInterval(async () => {
+    try {
+      // Sessions paused for more than half the expiry time get a reminder
+      const reminderThreshold = new Date(Date.now() - (env.SESSION_EXPIRY_HOURS * 60 * 60 * 1000) / 2);
+      const pausedSessions = await prisma.coupleSession.findMany({
+        where: {
+          status: 'PAUSED',
+          updatedAt: { lt: reminderThreshold },
+        },
+        select: { id: true, userAId: true, userBId: true },
+      });
+
+      for (const session of pausedSessions) {
+        const hoursLeft = Math.round(env.SESSION_EXPIRY_HOURS / 2);
+        await sendIdleReminder(
+          bot,
+          session,
+          `⏰ הסשן שלכם בהשהיה כבר זמן מה. אם לא תחזרו תוך ${hoursLeft} שעות, הסשן ייסגר אוטומטית.\n\nשלחו הודעה כדי להמשיך.`
+        );
+      }
+    } catch (error) {
+      logger.error('Paused session reminder error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, 5 * 60 * 1000);
+}
+
+/**
+ * Send a reminder to both users in a session.
+ */
+async function sendIdleReminder(
+  bot: Telegraf,
+  session: { userAId: string; userBId: string | null },
+  message: string
+): Promise<void> {
+  const userIds = [session.userAId];
+  if (session.userBId) userIds.push(session.userBId);
+
+  for (const userId of userIds) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { telegramId: true },
+      });
+      if (user) {
+        const telegramId = decrypt(user.telegramId);
+        await bot.telegram.sendMessage(telegramId, message);
+      }
+    } catch (error) {
+      logger.error('Failed to send idle reminder', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 main().catch((error) => {

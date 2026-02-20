@@ -4,6 +4,7 @@ import { processMessage } from '../../../core/pipeline/messagePipeline';
 import { transcribeVoiceNote, downloadVoiceFile, deleteVoiceFile } from '../../../services/voice/whisperService';
 import { logger } from '../../../utils/logger';
 import { detectLanguage, splitMessage } from '../../../utils/telegramHelpers';
+import { encrypt } from '../../../utils/encryption';
 import { TELEGRAM_MAX_VOICE_SIZE_MB } from '../../../config/constants';
 import { pendingReframes } from './callbackHandler';
 import { Markup } from 'telegraf';
@@ -97,8 +98,8 @@ export async function handleVoice(ctx: Context): Promise<void> {
           sessionId: session.id,
           senderRole: session.role,
           messageType: 'REFRAME',
-          reframedContent: result.reframedMessage,
-          rawContent: transcript,
+          reframedContent: encrypt(result.reframedMessage),
+          rawContent: encrypt(transcript),
           riskLevel: result.riskLevel,
           topicCategory: result.topicCategory,
         },

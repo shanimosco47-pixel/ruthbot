@@ -21,6 +21,7 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().min(1, 'STRIPE_SECRET_KEY is required'),
   STRIPE_WEBHOOK_SECRET: z.string().min(1, 'STRIPE_WEBHOOK_SECRET is required'),
+  STRIPE_PRICE_ID: z.string().min(1, 'STRIPE_PRICE_ID is required'),
 
   // Email (Resend)
   EMAIL_API_KEY: z.string().min(1, 'EMAIL_API_KEY is required'),
@@ -40,6 +41,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   WEBHOOK_URL: z.string().url().optional(),
+  BOT_USERNAME: z.string().default('RuthCoupleBot'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -57,7 +57,10 @@ export async function callClaude(options: ClaudeCallOptions): Promise<string> {
         throw error;
       }
 
-      const delayMs = CLAUDE_INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      // Exponential backoff with jitter to prevent thundering herd
+      const baseDelay = CLAUDE_INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      const jitter = Math.random() * baseDelay * 0.5;
+      const delayMs = Math.round(baseDelay + jitter);
       logger.info(`Retrying Claude call in ${delayMs}ms`, { attempt: attempt + 1, sessionId });
       await sleep(delayMs);
     }

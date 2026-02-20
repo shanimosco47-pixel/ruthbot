@@ -2,7 +2,8 @@ import { Context, Markup } from 'telegraf';
 import { SessionManager } from '../../../core/stateMachine/sessionManager';
 import { SessionStateMachine } from '../../../core/stateMachine/sessionStateMachine';
 import { callClaude } from '../../../services/ai/claudeClient';
-import { requiresPayment } from '../../../services/billing/stripeService';
+import { requiresPayment, createCheckoutSession } from '../../../services/billing/stripeService';
+import { env } from '../../../config/env';
 import { logger } from '../../../utils/logger';
 import { splitMessage } from '../../../utils/telegramHelpers';
 import { decrypt } from '../../../utils/encryption';
@@ -105,13 +106,25 @@ async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise
   // Payment gate: check if this non-trial session requires payment
   const needsPayment = await requiresPayment(sessionId);
   if (needsPayment) {
-    // [BILLING REVIEW NEEDED] — Stripe Checkout link generation
-    await ctx.reply(
-      '💳 הסשן הראשון שלך היה חינם. כדי להמשיך, צריך מנוי פעיל.\n\nלאחר התשלום, הקלד/י /start כדי להתחיל סשן חדש.',
-      Markup.inlineKeyboard([
-        [Markup.button.url('💳 לתשלום', 'https://couplebot.app/pricing')],
-      ])
-    );
+    const botInfo = await ctx.telegram.getMe();
+    const checkoutUrl = await createCheckoutSession({
+      sessionId,
+      userId,
+      botUsername: botInfo.username || env.BOT_USERNAME,
+    });
+
+    if (checkoutUrl) {
+      await ctx.reply(
+        '💳 הסשן הראשון שלך היה חינם. כדי להמשיך, צריך מנוי פעיל.\n\nלאחר התשלום, הקלד/י /start כדי להתחיל סשן חדש.',
+        Markup.inlineKeyboard([
+          [Markup.button.url('💳 לתשלום', checkoutUrl)],
+        ])
+      );
+    } else {
+      await ctx.reply(
+        '⚠️ אירעה שגיאה ביצירת קישור לתשלום. נסה/י שוב בעוד רגע.'
+      );
+    }
     return;
   }
 

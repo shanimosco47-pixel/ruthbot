@@ -86,9 +86,27 @@ RULES:
 
     let emotionTags: string[] = [];
     try {
-      emotionTags = JSON.parse(emotionTagsResponse);
+      // Extract JSON array from response (Claude may wrap in markdown)
+      let jsonStr = emotionTagsResponse.trim();
+      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1].trim();
+      }
+      // Also try to extract a JSON array if embedded in text
+      const arrayMatch = jsonStr.match(/\[[\s\S]*?\]/);
+      if (arrayMatch) {
+        jsonStr = arrayMatch[0];
+      }
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed) && parsed.every((t: unknown) => typeof t === 'string')) {
+        emotionTags = parsed;
+      } else {
+        emotionTags = ['unclassified'];
+      }
     } catch {
-      emotionTags = ['unclassified'];
+      // Last resort: split comma-separated values if JSON fails
+      const commaMatch = emotionTagsResponse.match(/[\w_]+/g);
+      emotionTags = commaMatch && commaMatch.length >= 2 ? commaMatch.slice(0, 4) : ['unclassified'];
     }
 
     // Find telemetry record — required for FK constraint

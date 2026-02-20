@@ -9,6 +9,7 @@ import { detectLanguage, splitMessage } from '../../../utils/telegramHelpers';
 import { prisma } from '../../../db/client';
 import { encrypt, decrypt } from '../../../utils/encryption';
 import { MAX_REFLECTION_REPROMPTS } from '../../../config/constants';
+import { env } from '../../../config/env';
 import { sendSessionSummaryEmail } from '../../../services/email/emailService';
 import { userStates, pendingReframes } from './callbackHandler';
 import type { MirrorEvaluation, SessionContext, PendingReframe } from '../../../types';
@@ -593,7 +594,7 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
     sharedCommitments: summary.sharedCommitments,
     encouragement: summary.encouragement,
     topicCategory,
-    ctaUrl: 'https://t.me/RuthCoupleBot',
+    ctaUrl: `https://t.me/${env.BOT_USERNAME}`,
   });
 
   if (sent) {

@@ -3,7 +3,7 @@ import { Telegraf } from 'telegraf';
 import { env } from '../../config/env';
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
-import { hmacHash, decrypt } from '../../utils/encryption';
+import { hmacHash, decrypt, encrypt } from '../../utils/encryption';
 import { SessionStateMachine } from '../../core/stateMachine/sessionStateMachine';
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
@@ -78,11 +78,17 @@ export async function handleStripeWebhook(
 async function processEventInBackground(event: Stripe.Event): Promise<void> {
   try {
     switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event);
+        break;
       case 'invoice.payment_succeeded':
         await handlePaymentSucceeded(event);
         break;
       case 'invoice.payment_failed':
         await handlePaymentFailed(event);
+        break;
+      case 'invoice.payment_action_required':
+        await handlePaymentActionRequired(event);
         break;
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(event);
@@ -101,6 +107,84 @@ async function processEventInBackground(event: Stripe.Event): Promise<void> {
       eventId: event.id,
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+async function handleCheckoutCompleted(event: Stripe.Event): Promise<void> {
+  const session = event.data.object as Stripe.Checkout.Session;
+  const customerId = session.customer as string;
+  const userId = session.metadata?.userId;
+
+  logger.info('Checkout session completed', { customerId, userId });
+
+  // Link Stripe customer to user if not already linked
+  if (userId && customerId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeCustomerId: true },
+    });
+
+    if (!user?.stripeCustomerId) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          stripeCustomerId: encrypt(customerId),
+          stripeCustomerIdHash: hmacHash(customerId),
+        },
+      });
+    }
+
+    // Set billing owner on the session
+    const sessionId = session.metadata?.sessionId;
+    if (sessionId) {
+      await prisma.coupleSession.update({
+        where: { id: sessionId },
+        data: { billingOwnerId: userId, isTrial: false },
+      });
+    }
+  }
+
+  // Notify user of successful payment
+  await notifyBillingOwner(customerId,
+    '✅ התשלום התקבל בהצלחה! אפשר להתחיל סשן חדש עם /start'
+  );
+}
+
+async function handlePaymentActionRequired(event: Stripe.Event): Promise<void> {
+  const invoice = event.data.object as Stripe.Invoice;
+  const customerId = invoice.customer as string;
+  const hostedUrl = invoice.hosted_invoice_url;
+
+  logger.warn('Payment action required (3D Secure)', { customerId });
+
+  const message = hostedUrl
+    ? `⚠️ התשלום שלך דורש אימות נוסף (3D Secure).\n\nלחץ/י על הקישור כדי להשלים את האימות:`
+    : '⚠️ התשלום שלך דורש אימות נוסף. בדוק/י את המייל שלך להוראות מהבנק.';
+
+  if (botInstance && hostedUrl) {
+    try {
+      const hash = hmacHash(customerId);
+      const user = await prisma.user.findUnique({
+        where: { stripeCustomerIdHash: hash },
+        select: { telegramId: true },
+      });
+
+      if (user) {
+        const telegramId = decrypt(user.telegramId);
+        const { Markup } = await import('telegraf');
+        await botInstance.telegram.sendMessage(telegramId, message,
+          Markup.inlineKeyboard([
+            [Markup.button.url('🔐 השלם אימות', hostedUrl)],
+          ])
+        );
+      }
+    } catch (error) {
+      logger.error('Failed to send payment action required notification', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  } else {
+    await notifyBillingOwner(customerId, message);
   }
 }
 
@@ -284,6 +368,80 @@ async function notifySessionUsers(sessionId: string, message: string): Promise<v
       sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+/**
+ * Create a Stripe Checkout Session for a user.
+ * Returns the checkout URL for redirection.
+ */
+export async function createCheckoutSession(params: {
+  sessionId: string;
+  userId: string;
+  botUsername: string;
+}): Promise<string | null> {
+  const { sessionId, userId, botUsername } = params;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeCustomerId: true, email: true },
+    });
+
+    let customerId: string | undefined;
+
+    // Reuse existing Stripe customer if available
+    if (user?.stripeCustomerId) {
+      customerId = decrypt(user.stripeCustomerId);
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: env.STRIPE_PRICE_ID,
+          quantity: 1,
+        },
+      ],
+      success_url: `https://t.me/${botUsername}?start=payment_success`,
+      cancel_url: `https://t.me/${botUsername}?start=payment_cancel`,
+      metadata: {
+        sessionId,
+        userId,
+      },
+    };
+
+    if (customerId) {
+      sessionParams.customer = customerId;
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create(sessionParams);
+
+    // Store customer ID if new
+    if (checkoutSession.customer && !user?.stripeCustomerId) {
+      const stripeCustomerId = checkoutSession.customer as string;
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          stripeCustomerId: encrypt(stripeCustomerId),
+          stripeCustomerIdHash: hmacHash(stripeCustomerId),
+        },
+      });
+    }
+
+    logger.info('Stripe Checkout Session created', {
+      sessionId,
+      checkoutSessionId: checkoutSession.id,
+    });
+
+    return checkoutSession.url;
+  } catch (error) {
+    logger.error('Failed to create Stripe Checkout Session', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
 }
 

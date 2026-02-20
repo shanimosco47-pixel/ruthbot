@@ -1,5 +1,7 @@
 import { Context, Markup } from 'telegraf';
 import { SessionManager } from '../../../core/stateMachine/sessionManager';
+import { prisma } from '../../../db/client';
+import { hmacHash } from '../../../utils/encryption';
 import { logger } from '../../../utils/logger';
 
 const DISCLAIMER_HE = `⚖️ *לפני שמתחילים — חשוב שתדע/י:*
@@ -23,6 +25,12 @@ export async function handleStart(ctx: Context): Promise<void> {
 
   // Check for deep link payload (invite token)
   const payload = (ctx as unknown as { startPayload?: string }).startPayload;
+
+  // Handle special deep link payloads
+  if (payload === 'unsubscribe') {
+    await handleUnsubscribe(ctx, telegramId);
+    return;
+  }
 
   if (payload && payload.length === 64) {
     // User B clicking invite link
@@ -109,8 +117,33 @@ async function handleDeepLinkStart(
   await notifyUserA(ctx, session.userAId, 'בן/בת הזוג פתח/ה את הלינק! 🎉\nממתינים להסכמה...');
 }
 
+async function handleUnsubscribe(ctx: Context, telegramId: string): Promise<void> {
+  const hash = hmacHash(telegramId);
+  const user = await prisma.user.findUnique({
+    where: { telegramIdHash: hash },
+    select: { id: true, emailOptedOut: true },
+  });
+
+  if (!user) {
+    await ctx.reply('לא נמצא חשבון משויך. הקלד/י /start כדי להתחיל.');
+    return;
+  }
+
+  if (user.emailOptedOut) {
+    await ctx.reply('כבר הוסרת מרשימת התפוצה. לא תקבל/י מיילים נוספים.');
+    return;
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailOptedOut: true },
+  });
+
+  logger.info('User unsubscribed from emails', { userId: user.id });
+  await ctx.reply('הוסרת מרשימת התפוצה בהצלחה. לא תקבל/י מיילים נוספים מרות בוט זוגיות.');
+}
+
 async function getSessionTopicCategory(sessionId: string): Promise<string | null> {
-  const { prisma } = await import('../../../db/client');
   const latestRisk = await prisma.riskEvent.findFirst({
     where: { sessionId },
     orderBy: { createdAt: 'desc' },
@@ -121,7 +154,6 @@ async function getSessionTopicCategory(sessionId: string): Promise<string | null
 
 async function notifyUserA(ctx: Context, userAId: string, message: string): Promise<void> {
   try {
-    const { prisma } = await import('../../../db/client');
     const { decrypt } = await import('../../../utils/encryption');
 
     const userA = await prisma.user.findUnique({
