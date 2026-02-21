@@ -6,10 +6,13 @@
 
 ---
 
-## Current Status: MVP RUNNING IN DEV MODE
+## Current Status: MVP DEPLOYED TO PRODUCTION 🚀
 
-The bot is **built and functional** in development mode (Telegram polling).
-All 12 development phases are complete. Not yet deployed to production.
+The bot is **live in production** on Render free tier (webhook mode).
+All 12 development phases are complete.
+- **URL:** https://ruthbot.onrender.com
+- **Health:** https://ruthbot.onrender.com/health
+- **Keep-alive:** UptimeRobot pings /health every 5 min
 
 ---
 
@@ -189,50 +192,56 @@ ASYNC_COACHING (parallel solo mode for User A)
 
 ---
 
-## Deployment — Render Free Tier (IN PROGRESS)
+## Deployment — Render Free Tier (LIVE ✅)
 
-### Plan
+### Infrastructure
 - **Platform:** Render.com (free tier)
+- **Service URL:** https://ruthbot.onrender.com
+- **Service ID:** srv-d6cv7nvfte5s73d2btp0
+- **Region:** Frankfurt (EU Central) — close to Supabase (EU West)
 - **Mode:** Webhook (production) — auto-registers with Telegram on startup
-- **Keep-alive:** UptimeRobot (free) pings `/health` every 5 min to prevent sleeping
+- **Keep-alive:** UptimeRobot pings `/health` every 5 min to prevent sleeping
 - **Database:** Stays on Supabase (no change)
-- **GitHub:** Code must be pushed to a private GitHub repo first
+
+### GitHub
+- **Repo:** https://github.com/shanimosco47-pixel/ruthbot (public — needed for Render free tier)
+- **Branch:** master
+- **Auto-deploy:** No (public repo, manual deploy)
 
 ### Render Settings
 - **Build Command:** `npm install && npx prisma generate && npm run build`
 - **Start Command:** `npm start`
 - **Node version:** 20
-- **Instance type:** Free
+- **Instance type:** Free (512MB RAM, 0.1 CPU)
 
-### Environment Variables for Render
-Same as `.env` but change:
+### Deployed Environment Variables
+Same as `.env` with:
 - `NODE_ENV` = `production`
-- `WEBHOOK_URL` = `https://<render-app-name>.onrender.com`
+- `WEBHOOK_URL` = `https://ruthbot.onrender.com`
 
-### Status
-- [ ] Push to GitHub (private repo) — need user's GitHub username
-- [ ] Create Render Web Service
-- [ ] Set environment variables
-- [ ] Deploy & verify
-- [ ] Set up UptimeRobot keep-alive
+### Deploy Checklist
+- [x] Push to GitHub
+- [x] Create Render Web Service
+- [x] Set environment variables (19 vars)
+- [x] Deploy & verify (webhook mode active)
+- [x] Set up UptimeRobot keep-alive
 
 ---
 
 ## Pending Work (Priority Order)
 
-1. **🚀 Deploy to Render** — IN PROGRESS (see above)
-2. **Speed optimization** — Combine risk + coaching into single Claude call
-3. **Stripe setup** — Need non-Israel entity or alternative processor
-4. **Resend email setup** — Sign up, get key, verify domain
-5. **Testing** — Unit tests pass, need integration testing with real conversations
+1. **Speed optimization** — Combine risk + coaching into single Claude call
+2. **Stripe setup** — Need non-Israel entity or alternative processor
+3. **Resend email setup** — Sign up, get key, verify domain
+4. **Testing** — Unit tests pass, need integration testing with real conversations
 
 ---
 
 ## Git State
 - **Branch:** master
-- **Last commit:** `9744d2c` — "fix: correct conversation architecture phrasing + pipeline optimization"
+- **Last commit:** `68ea244` — "Exclude test files from TypeScript build for production deployment"
 - **All 12 phases committed and merged**
-- **GitHub remote:** NOT YET CONFIGURED — code is local only
+- **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 
 ---
 
