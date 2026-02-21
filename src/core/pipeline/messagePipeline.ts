@@ -6,6 +6,13 @@ import { cleanupSessionState } from '../../adapters/telegram/handlers/callbackHa
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
 import { encrypt, decrypt } from '../../utils/encryption';
+import {
+  checkResponseQuality,
+  detectFrustration,
+  getFrustrationMenu,
+  getUserTurnCount,
+  shouldGenerateDraft,
+} from '../../utils/responseValidator';
 import type { PipelineInput, PipelineResult, ConversationMessage, RiskAssessment } from '../../types';
 
 /**
@@ -69,10 +76,48 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   }
 
   // ================================================
+  // Step 3.5: Turn Count + Frustration + Draft Trigger (RUTH V2)
+  // ================================================
+  const turnCount = getUserTurnCount(conversationHistory, context.currentRole);
+  const isFrustrated = detectFrustration(rawText);
+  const shouldDraft = shouldGenerateDraft(turnCount, conversationHistory, context.currentRole);
+
+  logger.info('RUTH V2 state', {
+    sessionId: context.sessionId,
+    turnCount,
+    isFrustrated,
+    shouldDraft,
+  });
+
+  // If user is frustrated, return fast-exit menu immediately (no Claude call)
+  if (isFrustrated) {
+    const frustrationMenu = getFrustrationMenu();
+
+    // Store message
+    await prisma.message.create({
+      data: {
+        sessionId: context.sessionId,
+        senderRole: context.currentRole,
+        messageType: 'COACHING',
+        rawContent: encrypt(frustrationMenu),
+      },
+    });
+
+    return {
+      riskLevel: riskAssessment.risk_level,
+      topicCategory: riskAssessment.topic_category,
+      coachingResponse: frustrationMenu,
+      reframedMessage: null,
+      requiresApproval: false,
+      halted: false,
+    };
+  }
+
+  // ================================================
   // Step 4: Emotional Coaching (DB data already prefetched above)
   // ================================================
 
-  const coachingResponse = await callClaude({
+  const rawCoachingResponse = await callClaude({
     systemPrompt: buildCoachingPrompt({
       userRole: context.currentRole,
       language: context.language,
@@ -82,10 +127,16 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
       patternSummaries,
       sessionId: context.sessionId,
       sessionStatus: context.status,
+      turnCount,
+      shouldDraft,
+      isFrustrated,
     }),
     userMessage: rawText,
     sessionId: context.sessionId,
   });
+
+  // Step 4.5: Response Quality Enforcement (RUTH V2)
+  const coachingResponse = checkResponseQuality(rawCoachingResponse);
 
   // ================================================
   // Step 5: Reframe Generation (only in ACTIVE state with partner)
@@ -197,6 +248,7 @@ async function handleHighRisk(
   ]);
 
   // Generate coaching response for L3/L3_PLUS
+  const turnCount = getUserTurnCount(conversationHistory, context.currentRole);
   const coachingResponse = await callClaude({
     systemPrompt: buildCoachingPrompt({
       userRole: context.currentRole,
@@ -207,6 +259,7 @@ async function handleHighRisk(
       patternSummaries,
       sessionId: context.sessionId,
       sessionStatus: context.status,
+      turnCount,
     }),
     userMessage: rawText,
     sessionId: context.sessionId,
