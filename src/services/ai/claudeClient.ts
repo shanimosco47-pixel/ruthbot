@@ -19,6 +19,7 @@ export interface ClaudeCallOptions {
   userMessage: string;
   maxTokens?: number;
   sessionId?: string;
+  model?: string; // Override model for specific calls (e.g., haiku for risk)
 }
 
 /**
@@ -26,12 +27,12 @@ export interface ClaudeCallOptions {
  * Max 2 retries (1s, 2s). After that, throw.
  */
 export async function callClaude(options: ClaudeCallOptions): Promise<string> {
-  const { systemPrompt, userMessage, maxTokens = 2048, sessionId } = options;
+  const { systemPrompt, userMessage, maxTokens = 2048, sessionId, model } = options;
 
   for (let attempt = 0; attempt <= CLAUDE_MAX_RETRIES; attempt++) {
     try {
       const response = await client.messages.create({
-        model: env.CLAUDE_MODEL,
+        model: model || env.CLAUDE_MODEL,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],

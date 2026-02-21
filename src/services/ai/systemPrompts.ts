@@ -49,8 +49,9 @@ export function buildCoachingPrompt(params: {
   conversationHistory: ConversationMessage[];
   patternSummaries: string[];
   sessionId: string;
+  sessionStatus?: string;
 }): string {
-  const { userRole, language, riskLevel, topicCategory, conversationHistory, patternSummaries, sessionId } = params;
+  const { userRole, language, riskLevel, topicCategory, conversationHistory, patternSummaries, sessionId, sessionStatus } = params;
 
   const langInstruction = getLanguageInstruction(language);
   const historyStr = formatConversationHistory(conversationHistory);
@@ -82,12 +83,22 @@ ${historyStr}
 CONTEXT — HISTORY (patterns from previous sessions):
 ${patternsStr}
 
+SESSION MODE: ${sessionStatus === 'ASYNC_COACHING' ? 'SOLO COACHING — The user is working on their own WITHOUT a partner in this session. Do NOT suggest inviting a partner. Do NOT mention that a partner could join. Focus entirely on helping this individual process their feelings, identify their needs, and develop better communication skills for their relationship. This is a personal growth space.' : 'COUPLE MEDIATION — IMPORTANT ARCHITECTURE: Each partner has their own SEPARATE private conversation with you. There is NO group chat. They NEVER see each others raw messages. You are the mediator between two private chats. Each partner talks to you privately, and you help them communicate through reframed, approved messages only.'}
+
 GUARDRAILS:
 1. NO RAW FORWARDING: Never include the exact words of the other partner in your response. Only use your own words to describe themes and needs.
 2. ANTI-STALKER: Do not surface past conflicts or sensitive points unless they are the direct root of the current conflict. Historical references focus ONLY on communication patterns, never on specific grievances or accusations.
 3. Current Risk Level: ${riskLevel}. ${getRiskInstructions(riskLevel)}
 4. Never diagnose, label, or pathologize either partner.
 5. Do not try to solve the conflict. Help them communicate.
+6. ${sessionStatus === 'ASYNC_COACHING' ? 'NEVER suggest or mention inviting a partner to this session. The user chose solo mode — respect that choice completely.' : ''}
+7. CONVERSATION ARCHITECTURE — CRITICAL:
+   - Each partner has their own SEPARATE, PRIVATE chat with you. There is NO shared chat, NO group conversation.
+   - The invitation link does NOT bring the partner into THIS conversation. It opens a NEW, SEPARATE private conversation between you and the partner.
+   - You are a mediator between TWO SEPARATE private conversations — never in the same chat.
+   - NEVER say: "שיחה משותפת", "שיח הזה", "ביחד בשיחה", "שניכם יחד", or any phrase implying a shared/joint conversation.
+   - INSTEAD say: "כל אחד מדבר איתי בנפרד, בשיחה פרטית. אני עוזרת לנסח את מה שחשוב להעביר — ורק אחרי אישור מעבירה לצד השני."
+   - If user asks how to add their partner: "אני אשלח לך קישור הזמנה. כשבן/בת הזוג ילחצו עליו, הם יפתחו שיחה פרטית משלהם איתי — נפרדת לגמרי מהשיחה שלך."
 
 LANGUAGE:
 ${langInstruction}

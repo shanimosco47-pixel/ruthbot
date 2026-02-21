@@ -130,14 +130,14 @@ async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise
 
   // Ask: join partner now or work alone first? (Section 2.5, 1A)
   await ctx.reply(
-    'רוצה לעבד לבד קודם, או שנצרף את בן/בת הזוג לסשן?',
+    'רוצה לעבד לבד קודם, או להזמין את בן/בת הזוג? (כל אחד בשיחה פרטית נפרדת איתי)',
     Markup.inlineKeyboard([
-      [Markup.button.callback('🤝 לצרף עכשיו', `onboard_choice:invite:${sessionId}`)],
+      [Markup.button.callback('🤝 להזמין עכשיו', `onboard_choice:invite:${sessionId}`)],
       [Markup.button.callback('🧘 לעבד לבד קודם', `onboard_choice:solo:${sessionId}`)],
     ])
   );
 
-  await ctx.reply('אפשר תמיד לצרף מאוחר יותר — בכל שלב בסשן.');
+  await ctx.reply('אפשר תמיד להזמין את בן/בת הזוג מאוחר יותר — בכל שלב בסשן.');
 }
 
 // ============================================
@@ -237,7 +237,7 @@ async function handleTelegramCheck(ctx: Context, telegramId: string, data: strin
 
     const modifiedText = `היי, פתחתי לנו סשן ברות בוט זוגיות. חשוב לי שנדבר בצורה רגועה שמכבדת את שנינו.
 
-הבוט יושב בטלגרם כדי שהשיחה שלנו תהיה הכי פרטית ומאובטחת — לא בוואטסאפ, לא בהודעות רגילות.
+כל אחד מדבר עם הבוט בנפרד, בשיחה פרטית. הבוט הוא המתווך — עוזר לנסח ומעביר רק מה שמאושר. הבוט יושב בטלגרם כדי שהשיחות יהיו הכי פרטיות ומאובטחות.
 
 אם אין לך את האפליקציה, זה ייקח דקה להוריד. אשמח שתיכנס/י.
 

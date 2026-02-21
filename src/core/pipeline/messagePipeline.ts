@@ -29,16 +29,21 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   });
 
   // ================================================
-  // Step 3: Risk Classification (MANDATORY — never skip)
+  // Step 3: Risk Classification + DB prefetch (parallel for speed)
   // ================================================
-  const riskAssessment = await classifyRisk({
-    message: rawText,
-    sessionId: context.sessionId,
-    senderRole: context.currentRole,
-  });
+  const [riskAssessment, conversationHistory, patternSummaries] = await Promise.all([
+    classifyRisk({
+      message: rawText,
+      sessionId: context.sessionId,
+      senderRole: context.currentRole,
+    }),
+    getConversationHistory(context.sessionId),
+    getPatternSummaries(context.anonymizedCoupleId, rawText),
+  ]);
 
   // Store message in DB (raw content encrypted at rest — Hat 4: Privacy)
-  await prisma.message.create({
+  // Fire and forget — don't block the pipeline
+  prisma.message.create({
     data: {
       sessionId: context.sessionId,
       senderRole: context.currentRole,
@@ -47,7 +52,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
       riskLevel: riskAssessment.risk_level,
       topicCategory: riskAssessment.topic_category,
     },
-  });
+  }).catch((err) => logger.error('Failed to store message', { error: err instanceof Error ? err.message : String(err) }));
 
   // ================================================
   // L4: HARD STOP
@@ -64,10 +69,8 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   }
 
   // ================================================
-  // Step 4: Emotional Coaching
+  // Step 4: Emotional Coaching (DB data already prefetched above)
   // ================================================
-  const conversationHistory = await getConversationHistory(context.sessionId);
-  const patternSummaries = await getPatternSummaries(context.anonymizedCoupleId, rawText);
 
   const coachingResponse = await callClaude({
     systemPrompt: buildCoachingPrompt({
@@ -78,6 +81,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
       conversationHistory,
       patternSummaries,
       sessionId: context.sessionId,
+      sessionStatus: context.status,
     }),
     userMessage: rawText,
     sessionId: context.sessionId,
@@ -187,8 +191,10 @@ async function handleHighRisk(
     riskLevel: riskAssessment.risk_level,
   });
 
-  const conversationHistory = await getConversationHistory(context.sessionId);
-  const patternSummaries = await getPatternSummaries(context.anonymizedCoupleId, rawText);
+  const [conversationHistory, patternSummaries] = await Promise.all([
+    getConversationHistory(context.sessionId),
+    getPatternSummaries(context.anonymizedCoupleId, rawText),
+  ]);
 
   // Generate coaching response for L3/L3_PLUS
   const coachingResponse = await callClaude({
@@ -200,6 +206,7 @@ async function handleHighRisk(
       conversationHistory,
       patternSummaries,
       sessionId: context.sessionId,
+      sessionStatus: context.status,
     }),
     userMessage: rawText,
     sessionId: context.sessionId,
