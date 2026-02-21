@@ -1,7 +1,8 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-02-21
+> Last updated: 2026-02-21 08:00
+> **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
@@ -188,20 +189,50 @@ ASYNC_COACHING (parallel solo mode for User A)
 
 ---
 
+## Deployment — Render Free Tier (IN PROGRESS)
+
+### Plan
+- **Platform:** Render.com (free tier)
+- **Mode:** Webhook (production) — auto-registers with Telegram on startup
+- **Keep-alive:** UptimeRobot (free) pings `/health` every 5 min to prevent sleeping
+- **Database:** Stays on Supabase (no change)
+- **GitHub:** Code must be pushed to a private GitHub repo first
+
+### Render Settings
+- **Build Command:** `npm install && npx prisma generate && npm run build`
+- **Start Command:** `npm start`
+- **Node version:** 20
+- **Instance type:** Free
+
+### Environment Variables for Render
+Same as `.env` but change:
+- `NODE_ENV` = `production`
+- `WEBHOOK_URL` = `https://<render-app-name>.onrender.com`
+
+### Status
+- [ ] Push to GitHub (private repo) — need user's GitHub username
+- [ ] Create Render Web Service
+- [ ] Set environment variables
+- [ ] Deploy & verify
+- [ ] Set up UptimeRobot keep-alive
+
+---
+
 ## Pending Work (Priority Order)
 
-1. **Speed optimization** — Combine risk + coaching into single Claude call
-2. **Stripe setup** — Need non-Israel entity or alternative processor
-3. **Resend email setup** — Sign up, get key, verify domain
-4. **Production deployment** — Webhook mode, HTTPS, process manager
+1. **🚀 Deploy to Render** — IN PROGRESS (see above)
+2. **Speed optimization** — Combine risk + coaching into single Claude call
+3. **Stripe setup** — Need non-Israel entity or alternative processor
+4. **Resend email setup** — Sign up, get key, verify domain
 5. **Testing** — Unit tests pass, need integration testing with real conversations
 
 ---
 
 ## Git State
-- **Branch:** main
-- **Last commit:** `e724699` — "fix: resolve 10 production gaps"
+- **Branch:** master
+- **Last commit:** `9744d2c` — "fix: correct conversation architecture phrasing + pipeline optimization"
 - **All 12 phases committed and merged**
+- **GitHub remote:** NOT YET CONFIGURED — code is local only
 
 ---
 
