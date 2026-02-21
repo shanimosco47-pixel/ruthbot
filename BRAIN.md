@@ -1,18 +1,30 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-02-21 08:00
+> Last updated: 2026-02-21 22:00
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: MVP DEPLOYED TO PRODUCTION 🚀
+## Current Status: RUTH V2 BEHAVIORAL UPDATE — DEPLOYED 🚀
 
 The bot is **live in production** on Render free tier (webhook mode).
-All 12 development phases are complete.
+All 12 development phases complete + **RUTH V2 behavioral tuning** applied.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
-- **Keep-alive:** UptimeRobot pings /health every 5 min
+- **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
+- **Last deploy:** Commit `64b199b` — RUTH V2 behavioral update
+
+### RUTH V2 Behavioral Changes (2026-02-21)
+- **System Prompt:** Replaced with RUTH V2 BEHAVIORAL OVERRIDE
+- **Word limit:** Max 55 Hebrew words per message (enforced in prompt + code)
+- **Question limit:** Max 1 question per message (code strips extras)
+- **Fast intake:** 4 turns max, then auto-draft
+- **Draft trigger:** At turn 5+ generates message draft + approval request
+- **Frustration detection:** Hebrew trigger words → 3-option menu (no therapy)
+- **Message templates:** Apology / Boundary / Future Rule
+- **New file:** `src/utils/responseValidator.ts`
+- **Modified:** `src/services/ai/systemPrompts.ts`, `src/core/pipeline/messagePipeline.ts`
 
 ---
 
@@ -234,14 +246,16 @@ Same as `.env` with:
 2. **Stripe setup** — Need non-Israel entity or alternative processor
 3. **Resend email setup** — Sign up, get key, verify domain
 4. **Testing** — Unit tests pass, need integration testing with real conversations
+5. **RUTH V2 fine-tuning** — Test with Raz scenario, verify ≤8 turns to completion
 
 ---
 
 ## Git State
 - **Branch:** master
-- **Last commit:** `68ea244` — "Exclude test files from TypeScript build for production deployment"
-- **All 12 phases committed and merged**
+- **Last commit:** `64b199b` — "RUTH V2 behavioral update: shorter responses, faster drafting"
+- **All 12 phases committed and merged + RUTH V2 behavioral tuning**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
+- **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
 
 ---
 
