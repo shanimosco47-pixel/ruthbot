@@ -2,8 +2,9 @@ import { Context, Markup } from 'telegraf';
 import { SessionManager } from '../../../core/stateMachine/sessionManager';
 import { SessionStateMachine } from '../../../core/stateMachine/sessionStateMachine';
 import { callClaude } from '../../../services/ai/claudeClient';
-import { requiresPayment, createCheckoutSession } from '../../../services/billing/stripeService';
-import { env } from '../../../config/env';
+// TODO: [BILLING REVIEW NEEDED] Re-enable when Stripe is configured
+// import { requiresPayment, createCheckoutSession } from '../../../services/billing/stripeService';
+// import { env } from '../../../config/env';
 import { logger } from '../../../utils/logger';
 import { splitMessage } from '../../../utils/telegramHelpers';
 import { decrypt } from '../../../utils/encryption';
@@ -103,34 +104,13 @@ async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise
 
   logger.info('Disclaimer accepted, session created', { telegramId, sessionId });
 
-  // Payment gate: check if this non-trial session requires payment
-  const needsPayment = await requiresPayment(sessionId);
-  if (needsPayment) {
-    const botInfo = await ctx.telegram.getMe();
-    const checkoutUrl = await createCheckoutSession({
-      sessionId,
-      userId,
-      botUsername: botInfo.username || env.BOT_USERNAME,
-    });
-
-    if (checkoutUrl) {
-      await ctx.reply(
-        '💳 הסשן הראשון שלך היה חינם. כדי להמשיך, צריך מנוי פעיל.\n\nלאחר התשלום, הקלד/י /start כדי להתחיל סשן חדש.',
-        Markup.inlineKeyboard([
-          [Markup.button.url('💳 לתשלום', checkoutUrl)],
-        ])
-      );
-    } else {
-      await ctx.reply(
-        '⚠️ אירעה שגיאה ביצירת קישור לתשלום. נסה/י שוב בעוד רגע.'
-      );
-    }
-    return;
-  }
+  // Payment gate: DISABLED until Stripe is configured
+  // TODO: [BILLING REVIEW NEEDED] Re-enable payment gate when Stripe is set up
+  // const needsPayment = await requiresPayment(sessionId);
 
   // Ask: join partner now or work alone first? (Section 2.5, 1A)
   await ctx.reply(
-    'רוצה לעבד לבד קודם, או להזמין את בן/בת הזוג? (כל אחד בשיחה פרטית נפרדת איתי)',
+    'רוצה לעבד לבד קודם, או להזמין את בן/בת הזוג? אני אגשר ביניכם.',
     Markup.inlineKeyboard([
       [Markup.button.callback('🤝 להזמין עכשיו', `onboard_choice:invite:${sessionId}`)],
       [Markup.button.callback('🧘 לעבד לבד קודם', `onboard_choice:solo:${sessionId}`)],

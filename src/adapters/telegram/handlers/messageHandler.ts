@@ -349,7 +349,7 @@ async function handleActiveSessionMessage(
   text: string,
   sessionContext: SessionContext
 ): Promise<void> {
-  await ctx.reply('רגע, אני מעבד... 🕐');
+  await ctx.reply('מקליד... ✍️');
 
   try {
     const result = await processMessage({
@@ -426,7 +426,7 @@ async function handleCoachingMessage(
   text: string,
   sessionId: string
 ): Promise<void> {
-  await ctx.reply('רגע, אני מעבד... 🕐');
+  await ctx.reply('מקליד... ✍️');
 
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
   const session = await SessionManager.getActiveSession(userId);
