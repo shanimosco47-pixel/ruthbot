@@ -153,8 +153,13 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
     // Transition to ASYNC_COACHING
     await SessionStateMachine.transition(sessionId, 'ASYNC_COACHING', { reason: 'user_chose_solo' });
 
+    // RULE 0: First message MUST be the intake template
     await ctx.reply(
-      'מצוין 💪\n\nבואו נתחיל. ספר/י לי — מה הדבר שהכי מציק לך ברגע הזה ביחסים שלכם?\n\nהכל נשאר פה בינינו. כתוב/כתבי בחופשיות.'
+      `שלום! אני רות, מנחה זוגי.
+בואו נתחיל בתלוש (משפט אחד לכל שאלה):
+1️⃣ מה קרה?
+2️⃣ מה אתה רוצה שיקרה בסוף?
+3️⃣ מה אסור שיקרה?`
     );
 
     userStates.set(telegramId, { state: 'coaching', sessionId });

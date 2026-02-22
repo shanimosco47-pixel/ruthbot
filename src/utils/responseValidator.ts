@@ -43,7 +43,15 @@ function removeExtraQuestions(text: string): string {
   for (const line of lines) {
     if (line.includes('?')) {
       if (!foundFirstQuestion) {
-        resultLines.push(line);
+        // If line has multiple questions, keep only the first one
+        const questionIndex = line.indexOf('?');
+        const nextQuestionIndex = line.indexOf('?', questionIndex + 1);
+        if (nextQuestionIndex !== -1) {
+          // Multiple questions on same line — keep text up to first '?'
+          resultLines.push(line.slice(0, questionIndex + 1));
+        } else {
+          resultLines.push(line);
+        }
         foundFirstQuestion = true;
       }
       // Skip subsequent lines with questions
@@ -188,6 +196,6 @@ export function getMessageTemplate(type: MessageTemplate): string {
 export function selectTemplate(isFrustrated: boolean, userGoal: string): MessageTemplate {
   if (isFrustrated) return 'apology';
   if (/התנצלות|סליחה|מצטער/i.test(userGoal)) return 'apology';
-  if (/גבול|כלל|עתיד|להבא/i.test(userGoal)) return 'future_rule';
+  if (/גבול|נקבע כלל|כלל לעתיד|עתיד|להבא/i.test(userGoal)) return 'future_rule';
   return 'boundary'; // safe default
 }
