@@ -6,6 +6,8 @@ import { logger } from '../../utils/logger';
 import { hmacHash, decrypt, encrypt } from '../../utils/encryption';
 import { SessionStateMachine } from '../../core/stateMachine/sessionStateMachine';
 
+const PLACEHOLDER_KEYS = ['sk_test_fake', 'placeholder', 'your_stripe_secret_key'];
+const isStripeConfigured = !PLACEHOLDER_KEYS.includes(env.STRIPE_SECRET_KEY);
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
 // Bot instance for sending notifications — set via setBotInstance()
@@ -29,6 +31,11 @@ export async function handleStripeWebhook(
   rawBody: string,
   signature: string
 ): Promise<void> {
+  if (!isStripeConfigured) {
+    logger.warn('Stripe not configured — ignoring webhook');
+    return;
+  }
+
   let event: Stripe.Event;
 
   // Verify webhook signature
@@ -374,12 +381,18 @@ async function notifySessionUsers(sessionId: string, message: string): Promise<v
 /**
  * Create a Stripe Checkout Session for a user.
  * Returns the checkout URL for redirection.
+ * Returns null gracefully when Stripe is not configured.
  */
 export async function createCheckoutSession(params: {
   sessionId: string;
   userId: string;
   botUsername: string;
 }): Promise<string | null> {
+  if (!isStripeConfigured) {
+    logger.warn('Stripe not configured — payment bypassed. Set STRIPE_SECRET_KEY in .env');
+    return null;
+  }
+
   const { sessionId, userId, botUsername } = params;
 
   try {
@@ -447,8 +460,10 @@ export async function createCheckoutSession(params: {
 
 /**
  * Check if a couple needs payment (trial expired, no active subscription).
+ * Always returns false (free) when Stripe is not configured.
  */
 export async function requiresPayment(sessionId: string): Promise<boolean> {
+  if (!isStripeConfigured) return false;
   const session = await prisma.coupleSession.findUnique({
     where: { id: sessionId },
     select: { isTrial: true, billingOwnerId: true },

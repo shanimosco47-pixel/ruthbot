@@ -85,28 +85,44 @@ function truncateToWordLimit(text: string, maxWords: number): string {
 // Frustration Detection
 // ============================================
 
-const FRUSTRATION_TRIGGERS = [
+// Multi-word triggers: safe to use substring matching
+const FRUSTRATION_PHRASE_TRIGGERS = [
   'נמאס',
   'זה לא עוזר',
   'אני פורש',
-  'עזבי',
-  'די',
   'מהשיחה איתך',
   'לא רלוונטי',
-  'תפסיקי',
-  'עזוב',
   'חבל על הזמן',
   'זה לא בשבילי',
   'אני לא מבין מה את רוצה',
   'אין טעם',
 ];
 
+// Short word triggers: require word boundary to avoid false positives
+// (e.g., "בדיוק" should NOT match "די")
+const FRUSTRATION_WORD_TRIGGERS = [
+  'עזבי',
+  'די',
+  'תפסיקי',
+  'עזוב',
+];
+
 /**
  * Detect if user is frustrated based on trigger words/phrases.
+ * Uses word-boundary matching for short triggers to avoid false positives.
  */
 export function detectFrustration(userMessage: string): boolean {
-  const normalized = userMessage.trim().toLowerCase();
-  return FRUSTRATION_TRIGGERS.some((trigger) => normalized.includes(trigger));
+  const normalized = userMessage.trim();
+
+  // Check phrase triggers (substring match is safe for multi-word phrases)
+  if (FRUSTRATION_PHRASE_TRIGGERS.some((trigger) => normalized.includes(trigger))) {
+    return true;
+  }
+
+  // Check word triggers with word-boundary logic
+  // Split message into words and check for exact matches
+  const words = normalized.split(/[\s,.\-!?;:]+/).filter((w) => w.length > 0);
+  return FRUSTRATION_WORD_TRIGGERS.some((trigger) => words.includes(trigger));
 }
 
 /**

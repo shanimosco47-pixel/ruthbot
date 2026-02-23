@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { callClaudeJSON } from '../ai/claudeClient';
-import { buildRiskEnginePrompt } from '../ai/systemPrompts';
+import { buildRiskEnginePrompt, buildCombinedRiskCoachingPrompt } from '../ai/systemPrompts';
 import { TOPIC_CATEGORIES, RISK_LEVELS, FALLBACK_TOPIC_CATEGORY } from '../../config/constants';
-import type { RiskAssessment } from '../../types';
+import type { RiskAssessment, CombinedRiskCoachingResult, ConversationMessage } from '../../types';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/client';
+import { checkResponseQuality } from '../../utils/responseValidator';
 
 // Zod schema for validating Risk Engine output
 const riskAssessmentSchema = z.object({
@@ -89,6 +90,121 @@ export async function classifyRisk(params: {
       topic_category: FALLBACK_TOPIC_CATEGORY,
       action_required: 'Manual review — Risk Engine call failed',
       reasoning: 'Automatic fallback due to API failure',
+    };
+  }
+}
+
+// Zod schema for combined risk + coaching response
+const combinedRiskCoachingSchema = z.object({
+  risk: z.object({
+    risk_level: z.enum(RISK_LEVELS),
+    topic_category: z.enum(TOPIC_CATEGORIES),
+    action_required: z.string(),
+    reasoning: z.string(),
+  }),
+  coaching: z.string().min(1),
+});
+
+/**
+ * Combined risk classification + coaching in a single Claude call.
+ * Cuts response time from ~10-15s to ~5-8s by eliminating one API round-trip.
+ */
+export async function classifyRiskAndCoach(params: {
+  message: string;
+  sessionId: string;
+  senderRole: 'USER_A' | 'USER_B';
+  userRole: 'USER_A' | 'USER_B';
+  language: string;
+  conversationHistory: ConversationMessage[];
+  patternSummaries: string[];
+  sessionStatus?: string;
+  turnCount?: number;
+  shouldDraft?: boolean;
+  isFrustrated?: boolean;
+}): Promise<CombinedRiskCoachingResult> {
+  const { message, sessionId, senderRole, userRole, language, conversationHistory, patternSummaries, sessionStatus, turnCount, shouldDraft, isFrustrated } = params;
+
+  const systemPrompt = buildCombinedRiskCoachingPrompt({
+    userRole,
+    language,
+    conversationHistory,
+    patternSummaries,
+    sessionId,
+    sessionStatus,
+    turnCount,
+    shouldDraft,
+    isFrustrated,
+  });
+
+  try {
+    const raw = await callClaudeJSON<Record<string, unknown>>({
+      systemPrompt,
+      userMessage: message,
+      maxTokens: 1500,
+      sessionId,
+    });
+
+    const result = combinedRiskCoachingSchema.safeParse(raw);
+
+    if (!result.success) {
+      logger.warn('Combined risk+coaching returned invalid format, applying fallback', {
+        sessionId,
+        errors: result.error.format(),
+        raw: JSON.stringify(raw).substring(0, 500),
+      });
+
+      // Try to salvage: extract risk if present, use raw coaching
+      const rawRisk = (raw as Record<string, unknown>)?.risk as Record<string, unknown> | undefined;
+      const rawCoaching = (raw as Record<string, unknown>)?.coaching;
+
+      const riskResult = riskAssessmentSchema.safeParse(rawRisk);
+      const risk: RiskAssessment = riskResult.success
+        ? riskResult.data
+        : { risk_level: 'L2', topic_category: FALLBACK_TOPIC_CATEGORY, action_required: 'Fallback — invalid combined response', reasoning: 'Automatic fallback due to parsing error' };
+
+      const coaching = typeof rawCoaching === 'string' && rawCoaching.length > 0
+        ? checkResponseQuality(rawCoaching)
+        : 'אני כאן בשבילך. ספר/י לי מה קורה?';
+
+      await logRiskEvent({ sessionId, senderRole, riskLevel: risk.risk_level, topicCategory: risk.topic_category, reasoning: risk.reasoning, actionRequired: risk.action_required });
+
+      return { risk, coaching };
+    }
+
+    const { risk, coaching } = result.data;
+
+    await logRiskEvent({
+      sessionId,
+      senderRole,
+      riskLevel: risk.risk_level,
+      topicCategory: risk.topic_category,
+      reasoning: risk.reasoning,
+      actionRequired: risk.action_required,
+    });
+
+    logger.info('Combined risk+coaching complete', {
+      sessionId,
+      senderRole,
+      riskLevel: risk.risk_level,
+      topicCategory: risk.topic_category,
+    });
+
+    return { risk, coaching: checkResponseQuality(coaching) };
+  } catch (error) {
+    logger.error('Combined risk+coaching call failed', {
+      sessionId,
+      senderRole,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return {
+      risk: {
+        risk_level: 'L2',
+        topic_category: FALLBACK_TOPIC_CATEGORY,
+        action_required: 'Manual review — combined call failed',
+        reasoning: 'Automatic fallback due to API failure',
+      },
+      coaching: 'אירעה שגיאה זמנית. ספר/י לי מה קורה — אני כאן.',
     };
   }
 }

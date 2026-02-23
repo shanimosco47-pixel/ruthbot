@@ -1,5 +1,10 @@
 # CLAUDE.md — רות בוט זוגיות (RuthBot)
 
+## Environment Setup
+```bash
+export CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true
+```
+
 ## BRAIN.md — חובה לעדכן
 קרא את `BRAIN.md` בתחילת כל סשן — הוא מכיל את כל המידע התפעולי (DB, API keys, deployment, באגים ידועים).
 

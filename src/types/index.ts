@@ -94,6 +94,15 @@ export interface ConversationMessage {
 }
 
 // ============================================
+// Combined Risk + Coaching Types
+// ============================================
+
+export interface CombinedRiskCoachingResult {
+  risk: RiskAssessment;
+  coaching: string;
+}
+
+// ============================================
 // Email Types
 // ============================================
 

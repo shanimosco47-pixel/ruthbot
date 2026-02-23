@@ -1,13 +1,12 @@
-import { classifyRisk } from '../../services/risk/riskEngine';
+import { classifyRisk, classifyRiskAndCoach } from '../../services/risk/riskEngine';
 import { callClaude } from '../../services/ai/claudeClient';
-import { buildCoachingPrompt, buildReframePrompt, getEmergencyResources } from '../../services/ai/systemPrompts';
+import { buildReframePrompt, getEmergencyResources } from '../../services/ai/systemPrompts';
 import { SessionStateMachine } from '../stateMachine/sessionStateMachine';
 import { cleanupSessionState } from '../../adapters/telegram/handlers/callbackHandler';
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
 import { encrypt, decrypt } from '../../utils/encryption';
 import {
-  checkResponseQuality,
   detectFrustration,
   getFrustrationMenu,
   getUserTurnCount,
@@ -36,47 +35,15 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   });
 
   // ================================================
-  // Step 3: Risk Classification + DB prefetch (parallel for speed)
+  // Step 1: DB prefetch (parallel, no API calls)
   // ================================================
-  const [riskAssessment, conversationHistory, patternSummaries] = await Promise.all([
-    classifyRisk({
-      message: rawText,
-      sessionId: context.sessionId,
-      senderRole: context.currentRole,
-    }),
+  const [conversationHistory, patternSummaries] = await Promise.all([
     getConversationHistory(context.sessionId),
     getPatternSummaries(context.anonymizedCoupleId, rawText),
   ]);
 
-  // Store message in DB (raw content encrypted at rest — Hat 4: Privacy)
-  // Fire and forget — don't block the pipeline
-  prisma.message.create({
-    data: {
-      sessionId: context.sessionId,
-      senderRole: context.currentRole,
-      messageType: input.messageType,
-      rawContent: encrypt(rawText),
-      riskLevel: riskAssessment.risk_level,
-      topicCategory: riskAssessment.topic_category,
-    },
-  }).catch((err) => logger.error('Failed to store message', { error: err instanceof Error ? err.message : String(err) }));
-
   // ================================================
-  // L4: HARD STOP
-  // ================================================
-  if (riskAssessment.risk_level === 'L4') {
-    return handleL4HardStop(context, riskAssessment);
-  }
-
-  // ================================================
-  // L3/L3_PLUS: Stop pipeline, coaching only
-  // ================================================
-  if (riskAssessment.risk_level === 'L3' || riskAssessment.risk_level === 'L3_PLUS') {
-    return handleHighRisk(context, rawText, riskAssessment);
-  }
-
-  // ================================================
-  // Step 3.5: Turn Count + Frustration + Draft Trigger (RUTH V2)
+  // Step 2: Local checks — turn count, frustration, draft trigger
   // ================================================
   const turnCount = getUserTurnCount(conversationHistory, context.currentRole);
   const isFrustrated = detectFrustration(rawText);
@@ -89,11 +56,35 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     shouldDraft,
   });
 
-  // If user is frustrated, return fast-exit menu immediately (no Claude call)
+  // ================================================
+  // Step 2.5: Frustrated user — quick risk-only call + menu (fast path)
+  // ================================================
   if (isFrustrated) {
+    const riskAssessment = await classifyRisk({
+      message: rawText,
+      sessionId: context.sessionId,
+      senderRole: context.currentRole,
+    });
+
+    // Store user message (fire and forget)
+    prisma.message.create({
+      data: {
+        sessionId: context.sessionId,
+        senderRole: context.currentRole,
+        messageType: input.messageType,
+        rawContent: encrypt(rawText),
+        riskLevel: riskAssessment.risk_level,
+        topicCategory: riskAssessment.topic_category,
+      },
+    }).catch((err) => logger.error('Failed to store message', { error: err instanceof Error ? err.message : String(err) }));
+
+    // L4 even for frustrated users — safety first
+    if (riskAssessment.risk_level === 'L4') {
+      return handleL4HardStop(context, riskAssessment);
+    }
+
     const frustrationMenu = getFrustrationMenu();
 
-    // Store message
     await prisma.message.create({
       data: {
         sessionId: context.sessionId,
@@ -114,38 +105,62 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   }
 
   // ================================================
-  // Step 4: Emotional Coaching (DB data already prefetched above)
+  // Step 3: Combined Risk + Coaching (single Claude call — speed optimization)
   // ================================================
-
-  const rawCoachingResponse = await callClaude({
-    systemPrompt: buildCoachingPrompt({
-      userRole: context.currentRole,
-      language: context.language,
-      riskLevel: riskAssessment.risk_level,
-      topicCategory: riskAssessment.topic_category,
-      conversationHistory,
-      patternSummaries,
-      sessionId: context.sessionId,
-      sessionStatus: context.status,
-      turnCount,
-      shouldDraft,
-      isFrustrated,
-    }),
-    userMessage: rawText,
+  const { risk: riskAssessment, coaching: coachingResponse } = await classifyRiskAndCoach({
+    message: rawText,
     sessionId: context.sessionId,
+    senderRole: context.currentRole,
+    userRole: context.currentRole,
+    language: context.language,
+    conversationHistory,
+    patternSummaries,
+    sessionStatus: context.status,
+    turnCount,
+    shouldDraft,
+    isFrustrated,
   });
 
-  // Step 4.5: Response Quality Enforcement (RUTH V2)
-  const coachingResponse = checkResponseQuality(rawCoachingResponse);
+  // Store user message (fire and forget)
+  prisma.message.create({
+    data: {
+      sessionId: context.sessionId,
+      senderRole: context.currentRole,
+      messageType: input.messageType,
+      rawContent: encrypt(rawText),
+      riskLevel: riskAssessment.risk_level,
+      topicCategory: riskAssessment.topic_category,
+    },
+  }).catch((err) => logger.error('Failed to store message', { error: err instanceof Error ? err.message : String(err) }));
 
   // ================================================
-  // Step 5: Reframe Generation (only in ACTIVE state with partner)
+  // L4: HARD STOP
+  // ================================================
+  if (riskAssessment.risk_level === 'L4') {
+    return handleL4HardStop(context, riskAssessment);
+  }
+
+  // ================================================
+  // L3/L3_PLUS: Return coaching from combined call, no reframe
+  // ================================================
+  if (riskAssessment.risk_level === 'L3' || riskAssessment.risk_level === 'L3_PLUS') {
+    return {
+      riskLevel: riskAssessment.risk_level,
+      topicCategory: riskAssessment.topic_category,
+      coachingResponse,
+      reframedMessage: null,
+      requiresApproval: false,
+      halted: false,
+    };
+  }
+
+  // ================================================
+  // Step 4: Reframe Generation (only in ACTIVE state with partner, L1/L2 only)
   // ================================================
   let reframedMessage: string | null = null;
   let requiresApproval = false;
 
   if (context.status === 'ACTIVE' && context.userBId) {
-    // Only generate reframe for L1/L2 messages when session is ACTIVE
     if (riskAssessment.risk_level === 'L1' || riskAssessment.risk_level === 'L2') {
       const conversationContext = conversationHistory
         .slice(-6)
@@ -167,7 +182,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     }
   }
 
-  // Store bot response as message (encrypted at rest)
+  // Store bot response (encrypted at rest)
   await prisma.message.create({
     data: {
       sessionId: context.sessionId,
@@ -225,53 +240,6 @@ async function handleL4HardStop(
     requiresApproval: false,
     halted: true,
     haltReason: 'L4_critical_safety',
-  };
-}
-
-/**
- * L3/L3_PLUS: Stop pipeline for this message, continue coaching sender.
- */
-async function handleHighRisk(
-  context: SessionContext,
-  rawText: string,
-  riskAssessment: RiskAssessment
-): Promise<PipelineResult> {
-  logger.warn('High risk message detected', {
-    sessionId: context.sessionId,
-    role: context.currentRole,
-    riskLevel: riskAssessment.risk_level,
-  });
-
-  const [conversationHistory, patternSummaries] = await Promise.all([
-    getConversationHistory(context.sessionId),
-    getPatternSummaries(context.anonymizedCoupleId, rawText),
-  ]);
-
-  // Generate coaching response for L3/L3_PLUS
-  const turnCount = getUserTurnCount(conversationHistory, context.currentRole);
-  const coachingResponse = await callClaude({
-    systemPrompt: buildCoachingPrompt({
-      userRole: context.currentRole,
-      language: context.language,
-      riskLevel: riskAssessment.risk_level,
-      topicCategory: riskAssessment.topic_category,
-      conversationHistory,
-      patternSummaries,
-      sessionId: context.sessionId,
-      sessionStatus: context.status,
-      turnCount,
-    }),
-    userMessage: rawText,
-    sessionId: context.sessionId,
-  });
-
-  return {
-    riskLevel: riskAssessment.risk_level,
-    topicCategory: riskAssessment.topic_category,
-    coachingResponse,
-    reframedMessage: null,
-    requiresApproval: false,
-    halted: false, // Session continues, but message NOT forwarded
   };
 }
 

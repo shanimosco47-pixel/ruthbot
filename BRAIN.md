@@ -1,19 +1,36 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-02-21 22:00
+> Last updated: 2026-02-23
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V2 BEHAVIORAL UPDATE — DEPLOYED 🚀
+## Current Status: RUTH V2.2 SPEED OPTIMIZATION — READY TO DEPLOY
 
 The bot is **live in production** on Render free tier (webhook mode).
-All 12 development phases complete + **RUTH V2 behavioral tuning** applied.
+All 12 development phases complete + **RUTH V2 behavioral tuning** + **V2.2 speed optimization** applied.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
 - **Last deploy:** Commit `64b199b` — RUTH V2 behavioral update
+
+### RUTH V2.2 Speed Optimization (2026-02-23)
+- **Combined risk+coaching:** Single Claude API call replaces 2 sequential calls
+  - Before: risk (~3s) + coaching (~7s) = ~10-15s
+  - After: combined (~7s) = ~5-8s total
+- **New function:** `classifyRiskAndCoach()` in `riskEngine.ts`
+- **New prompt:** `buildCombinedRiskCoachingPrompt()` in `systemPrompts.ts`
+- **Pipeline rewrite:** `messagePipeline.ts` now uses combined call for non-frustrated users
+- **Frustration fast path:** Frustrated users get quick risk-only call + menu (~3s)
+- **Bug fix:** Frustration detection false positive — "בדיוק" no longer triggers "די"
+  - Short word triggers now use word-boundary matching
+- **Stripe graceful degradation:** Placeholder API keys bypass payment (returns free)
+- **Resend graceful degradation:** Placeholder API keys skip email sends with warning log
+- **Removed:** `handleHighRisk()` function (redundant — combined call handles L3/L3_PLUS)
+- **New tests:** Integration tests + Raz scenario (≤8 turns verification)
+  - `src/__tests__/integration/conversationFlow.test.ts`
+- **Tests:** 231 passing, 0 failing
 
 ### RUTH V2 Behavioral Changes (2026-02-21)
 - **System Prompt:** Replaced with RUTH V2 BEHAVIORAL OVERRIDE
@@ -242,17 +259,20 @@ Same as `.env` with:
 
 ## Pending Work (Priority Order)
 
-1. **Speed optimization** — Combine risk + coaching into single Claude call
-2. **Stripe setup** — Need non-Israel entity or alternative processor
-3. **Resend email setup** — Sign up, get key, verify domain
-4. **Testing** — Unit tests pass, need integration testing with real conversations
-5. **RUTH V2 fine-tuning** — Test with Raz scenario, verify ≤8 turns to completion
+1. ~~**Speed optimization**~~ — ✅ DONE (combined risk+coaching call)
+2. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
+   - **Alternatives:** Lemon Squeezy (international), PayPlus/Tranzila (Israeli processors), Paddle
+3. **Resend email setup** — Sign up, get key, verify domain (code gracefully skips when not configured)
+4. ~~**Testing**~~ — ✅ DONE (231 tests passing, integration tests + Raz scenario added)
+5. ~~**RUTH V2 fine-tuning**~~ — ✅ DONE (Raz scenario verified ≤5 turns to draft)
+6. **Deploy V2.2** — Push to GitHub + redeploy on Render
+7. **Real-world testing** — Test with actual Telegram conversations
 
 ---
 
 ## Git State
 - **Branch:** master
-- **Last commit:** `64b199b` — "RUTH V2 behavioral update: shorter responses, faster drafting"
+- **Last commit:** pending — "RUTH V2.2: speed optimization + integration tests"
 - **All 12 phases committed and merged + RUTH V2 behavioral tuning**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
