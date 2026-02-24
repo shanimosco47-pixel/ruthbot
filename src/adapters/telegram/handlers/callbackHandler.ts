@@ -177,18 +177,29 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
 
   const invitationMessage = state.data?.invitationMessage as string || '';
 
-  // Send shareable package (Section 2.5, 1D)
-  const shareableText = `✉️ העתק ושלח לבן/בת הזוג בוואטסאפ או בטלגרם:
+  // ── FIX: Bot does NOT send the invite automatically. ──────────────────────
+  // Previous wording ("✉️ העתק ושלח") was ambiguous — users assumed the bot
+  // sent the message on their behalf. The bot cannot initiate contact with a
+  // user who has never started it (Telegram privacy restriction). The correct
+  // flow is: User A manually forwards the invite link to User B via any app.
+  // ─────────────────────────────────────────────────────────────────────────
 
-"${invitationMessage}"
+  // Step 1: Show the ready-to-forward package (invitation + link together)
+  const forwardableText =
+    `"${invitationMessage}"\n\n` +
+    `🔗 לינק להצטרפות לסשן: ${link}`;
 
-🔗 הלינק לסשן: ${link}
+  await ctx.reply(`📋 הודעת ההזמנה מוכנה — העתק/י ושלח/י לבן/בת הזוג:\n\n${forwardableText}`);
 
-💡 שלח את ההודעה והלינק ביחד, בהודעה אחת.`;
-
-  await ctx.reply(shareableText);
+  // Step 2: Explicit instruction + timed reminder — no "sent" language
+  const ttlLabel = ttlHours === 1 ? 'שעה אחת' : ttlHours === 3 ? '3 שעות' : '12 שעות';
   await ctx.reply(
-    `⏰ הלינק פעיל למשך ${ttlHours === 1 ? 'שעה אחת' : ttlHours === 3 ? '3 שעות' : '12 שעות'}.\n\nבינתיים, אני כאן אם תרצה/י להמשיך לעבד לבד.`
+    `⚠️ שים/י לב: הבוט לא שולח את ההזמנה אוטומטית.\n\n` +
+    `📤 שלח/י את ההודעה והלינק מעל לבן/בת הזוג בעצמך — בוואטסאפ, SMS, או בטלגרם.\n\n` +
+    `⏰ הלינק יפוג עוד ${ttlLabel}. בינתיים, אני כאן אם תרצה/י להמשיך לעבד לבד.`,
+    Markup.inlineKeyboard([
+      [Markup.button.url('📤 שתף ישירות בטלגרם', `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(invitationMessage)}`)],
+    ])
   );
 
   userStates.set(telegramId, { state: 'coaching', sessionId });

@@ -6,7 +6,7 @@
 
 ---
 
-## Current Status: RUTH V2.2 SPEED OPTIMIZATION — READY TO DEPLOY
+## Current Status: RUTH V2.2 + INVITE-DELIVERY BUG FIX — READY TO DEPLOY
 
 The bot is **live in production** on Render free tier (webhook mode).
 All 12 development phases complete + **RUTH V2 behavioral tuning** + **V2.2 speed optimization** applied.
@@ -259,6 +259,10 @@ Same as `.env` with:
 
 ## Pending Work (Priority Order)
 
+1. ~~**Invite delivery bug fix**~~ — ✅ DONE (2026-02-24)
+   - Old: "✉️ העתק ושלח" was ambiguous — users assumed bot sent automatically
+   - Fix: Explicit ⚠️ warning + "הבוט לא שולח אוטומטית" + 📤 Telegram share button
+   - File: `src/adapters/telegram/handlers/callbackHandler.ts` → `handleTtlChoice()`
 1. ~~**Speed optimization**~~ — ✅ DONE (combined risk+coaching call)
 2. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
    - **Alternatives:** Lemon Squeezy (international), PayPlus/Tranzila (Israeli processors), Paddle
