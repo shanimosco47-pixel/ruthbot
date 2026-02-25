@@ -370,11 +370,8 @@ async function handleActiveSessionMessage(
         ])
       );
     } else if (result.isDraft) {
-      for (const chunk of splitMessage(result.coachingResponse)) {
-        await ctx.reply(chunk);
-      }
       await ctx.reply(
-        'מה דעתך?',
+        `${result.coachingResponse}\n\nמה דעתך?`,
         Markup.inlineKeyboard([
           [Markup.button.callback('✅ שלח', `draft:approve:${sessionContext.sessionId}`)],
           [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionContext.sessionId}`)],
@@ -489,12 +486,9 @@ async function handleCoachingMessage(
         ])
       );
     } else if (result.isDraft) {
-      // Draft phase — send coaching with draft approval buttons
-      for (const chunk of splitMessage(result.coachingResponse)) {
-        await ctx.reply(chunk);
-      }
+      // Draft phase — send coaching text + buttons in single message
       await ctx.reply(
-        'מה דעתך?',
+        `${result.coachingResponse}\n\nמה דעתך?`,
         Markup.inlineKeyboard([
           [Markup.button.callback('✅ שלח', `draft:approve:${sessionId}`)],
           [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionId}`)],
