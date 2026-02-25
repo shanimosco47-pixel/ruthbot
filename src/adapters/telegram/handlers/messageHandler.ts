@@ -359,9 +359,32 @@ async function handleActiveSessionMessage(
       telegramMessageId: ctx.message!.message_id,
     });
 
-    // Send coaching response
-    for (const chunk of splitMessage(result.coachingResponse)) {
-      await ctx.reply(chunk);
+    // Send coaching response (with buttons for frustration/draft)
+    if (result.isFrustrationMenu) {
+      await ctx.reply(
+        result.coachingResponse,
+        Markup.inlineKeyboard([
+          [Markup.button.callback('🙏 התנצלות', `frustration:apology:${sessionContext.sessionId}`)],
+          [Markup.button.callback('🛑 גבול', `frustration:boundary:${sessionContext.sessionId}`)],
+          [Markup.button.callback('📏 כלל לעתיד', `frustration:future_rule:${sessionContext.sessionId}`)],
+        ])
+      );
+    } else if (result.isDraft) {
+      for (const chunk of splitMessage(result.coachingResponse)) {
+        await ctx.reply(chunk);
+      }
+      await ctx.reply(
+        'מה דעתך?',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('✅ שלח', `draft:approve:${sessionContext.sessionId}`)],
+          [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionContext.sessionId}`)],
+          [Markup.button.callback('❌ בטל', `draft:cancel:${sessionContext.sessionId}`)],
+        ])
+      );
+    } else {
+      for (const chunk of splitMessage(result.coachingResponse)) {
+        await ctx.reply(chunk);
+      }
     }
 
     // If reframe is available and needs approval
@@ -455,8 +478,33 @@ async function handleCoachingMessage(
       telegramMessageId: ctx.message!.message_id,
     });
 
-    for (const chunk of splitMessage(result.coachingResponse)) {
-      await ctx.reply(chunk);
+    // Frustration menu — show with inline buttons
+    if (result.isFrustrationMenu) {
+      await ctx.reply(
+        result.coachingResponse,
+        Markup.inlineKeyboard([
+          [Markup.button.callback('🙏 התנצלות', `frustration:apology:${sessionId}`)],
+          [Markup.button.callback('🛑 גבול', `frustration:boundary:${sessionId}`)],
+          [Markup.button.callback('📏 כלל לעתיד', `frustration:future_rule:${sessionId}`)],
+        ])
+      );
+    } else if (result.isDraft) {
+      // Draft phase — send coaching with draft approval buttons
+      for (const chunk of splitMessage(result.coachingResponse)) {
+        await ctx.reply(chunk);
+      }
+      await ctx.reply(
+        'מה דעתך?',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('✅ שלח', `draft:approve:${sessionId}`)],
+          [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionId}`)],
+          [Markup.button.callback('❌ בטל', `draft:cancel:${sessionId}`)],
+        ])
+      );
+    } else {
+      for (const chunk of splitMessage(result.coachingResponse)) {
+        await ctx.reply(chunk);
+      }
     }
   } catch (error) {
     logger.error('Coaching message error', {

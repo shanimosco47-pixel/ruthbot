@@ -20,11 +20,10 @@ export function checkResponseQuality(response: string): string {
     cleaned = removeExtraQuestions(cleaned);
   }
 
-  // Log warning if over word limit (system prompt should handle this, but double-check)
+  // Enforce word limit — truncate any response over MAX_WORDS
   const wordCount = cleaned.split(/\s+/).filter((w) => w.length > 0).length;
-  if (wordCount > MAX_WORDS * 1.5) {
-    // If drastically over limit, truncate to reasonable length
-    cleaned = truncateToWordLimit(cleaned, MAX_WORDS + 20);
+  if (wordCount > MAX_WORDS) {
+    cleaned = truncateToWordLimit(cleaned, MAX_WORDS);
   }
 
   return cleaned;
@@ -32,35 +31,32 @@ export function checkResponseQuality(response: string): string {
 
 /**
  * Remove all questions except the first one.
- * Splits by sentences and keeps only the first sentence that contains '?'.
+ * Splits by sentence boundaries (? ! .) to handle multiple questions
+ * on the same line or across lines.
  */
 function removeExtraQuestions(text: string): string {
-  // Split by newlines first, then process each line
-  const lines = text.split('\n');
+  // Split into sentences by common Hebrew/punctuation boundaries
+  // Keeps the delimiter attached to the preceding sentence
+  const sentences = text.split(/(?<=\?|!|\.)\s*/);
   let foundFirstQuestion = false;
-  const resultLines: string[] = [];
+  const resultSentences: string[] = [];
 
-  for (const line of lines) {
-    if (line.includes('?')) {
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.includes('?')) {
       if (!foundFirstQuestion) {
-        // If line has multiple questions, keep only the first one
-        const questionIndex = line.indexOf('?');
-        const nextQuestionIndex = line.indexOf('?', questionIndex + 1);
-        if (nextQuestionIndex !== -1) {
-          // Multiple questions on same line — keep text up to first '?'
-          resultLines.push(line.slice(0, questionIndex + 1));
-        } else {
-          resultLines.push(line);
-        }
+        resultSentences.push(trimmed);
         foundFirstQuestion = true;
       }
-      // Skip subsequent lines with questions
+      // Skip subsequent sentences with questions
     } else {
-      resultLines.push(line);
+      resultSentences.push(trimmed);
     }
   }
 
-  return resultLines.join('\n').trim();
+  return resultSentences.join(' ').trim();
 }
 
 /**

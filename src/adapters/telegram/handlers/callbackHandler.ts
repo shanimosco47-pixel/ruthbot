@@ -10,6 +10,8 @@ import { splitMessage } from '../../../utils/telegramHelpers';
 import { decrypt } from '../../../utils/encryption';
 import { prisma } from '../../../db/client';
 import { MAX_EDIT_ITERATIONS } from '../../../config/constants';
+import { getMessageTemplate } from '../../../utils/responseValidator';
+import type { MessageTemplate } from '../../../utils/responseValidator';
 import type { PendingReframe } from '../../../types';
 
 // In-memory store for pending reframes and user states
@@ -81,6 +83,10 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
       await handleEmailOptChoice(ctx, telegramId, data);
     } else if (data.startsWith('delete_confirm:')) {
       await handleDeleteConfirm(ctx, telegramId, data);
+    } else if (data.startsWith('frustration:')) {
+      await handleFrustrationChoice(ctx, telegramId, data);
+    } else if (data.startsWith('draft:')) {
+      await handleDraftChoice(ctx, telegramId, data);
     } else {
       logger.warn('Unknown callback query', { data, telegramId });
     }
@@ -536,5 +542,49 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
       sessionId: pending.sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+// ============================================
+// Frustration Menu Choice (Rule 5)
+// ============================================
+
+async function handleFrustrationChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
+  const parts = data.split(':');
+  const templateType = parts[1] as MessageTemplate; // 'apology', 'boundary', 'future_rule'
+  const sessionId = parts[2];
+
+  const template = getMessageTemplate(templateType);
+
+  await ctx.reply(
+    `📝 הנה טיוטה:\n\n${template}`,
+    Markup.inlineKeyboard([
+      [Markup.button.callback('✅ שלח', `draft:approve:${sessionId}`)],
+      [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionId}`)],
+      [Markup.button.callback('❌ בטל', `draft:cancel:${sessionId}`)],
+    ])
+  );
+
+  userStates.set(telegramId, { state: 'coaching', sessionId });
+}
+
+// ============================================
+// Draft Choice (Rule 4)
+// ============================================
+
+async function handleDraftChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
+  const parts = data.split(':');
+  const choice = parts[1]; // 'approve', 'edit', 'cancel'
+  const sessionId = parts[2];
+
+  if (choice === 'approve') {
+    await ctx.reply('✅ מעולה! ההודעה מוכנה לשליחה.');
+    userStates.set(telegramId, { state: 'coaching', sessionId });
+  } else if (choice === 'edit') {
+    await ctx.reply('כתוב/י את הגרסה שלך:');
+    userStates.set(telegramId, { state: 'coaching', sessionId });
+  } else if (choice === 'cancel') {
+    await ctx.reply('בוטל. אפשר להמשיך לדבר.');
+    userStates.set(telegramId, { state: 'coaching', sessionId });
   }
 }

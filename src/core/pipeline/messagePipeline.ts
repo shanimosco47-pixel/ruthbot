@@ -101,6 +101,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
       reframedMessage: null,
       requiresApproval: false,
       halted: false,
+      isFrustrationMenu: true,
     };
   }
 
@@ -199,6 +200,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     reframedMessage,
     requiresApproval,
     halted: false,
+    isDraft: shouldDraft,
   };
 }
 

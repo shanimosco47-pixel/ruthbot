@@ -57,6 +57,8 @@ export interface PipelineResult {
   requiresApproval: boolean;
   halted: boolean;
   haltReason?: string;
+  isFrustrationMenu?: boolean;
+  isDraft?: boolean;
 }
 
 // ============================================
