@@ -55,6 +55,9 @@ model CoupleSession {
   inviteTokenUsed         Boolean        @default(false) @map("invite_token_used")
   inviteTokenExpiresAt    DateTime?      @map("invite_token_expires_at")
 
+  // Close orchestration guard (prevents double summary delivery)
+  closeOrchestrated       Boolean        @default(false) @map("close_orchestrated")
+
   // Timestamps
   createdAt               DateTime       @default(now()) @map("created_at")
   updatedAt               DateTime       @updatedAt @map("updated_at")

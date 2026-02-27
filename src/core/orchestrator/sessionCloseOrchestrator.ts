@@ -45,11 +45,28 @@ function cacheSummary(sessionId: string, userRole: 'USER_A' | 'USER_B', data: Su
  * 3. Ask about email opt-in
  * 4. Generate and store session embeddings
  * 5. Update telemetry
+ *
+ * GUARD: Uses atomic closeOrchestrated flag to prevent duplicate orchestration.
+ * This prevents summary messages from appearing in the wrong context when:
+ * - /stop fires orchestration async, then user immediately starts a new session
+ * - Periodic auto-close task double-fires for recently closed sessions
  */
 export async function orchestrateSessionClose(
   bot: Telegraf,
   sessionId: string
 ): Promise<void> {
+  // Atomic claim: only one orchestration per session.
+  // updateMany with WHERE closeOrchestrated=false acts as compare-and-swap.
+  const claimed = await prisma.coupleSession.updateMany({
+    where: { id: sessionId, status: 'CLOSED', closeOrchestrated: false },
+    data: { closeOrchestrated: true },
+  });
+
+  if (claimed.count === 0) {
+    logger.info('Session close orchestration skipped (already orchestrated or not CLOSED)', { sessionId });
+    return;
+  }
+
   const session = await prisma.coupleSession.findUnique({
     where: { id: sessionId },
     include: {
@@ -91,18 +108,28 @@ export async function orchestrateSessionClose(
   const summaryA = await generateSummary(sessionId, 'USER_A', conversationHistory, topicCategory, userALanguage);
   cacheSummary(sessionId, 'USER_A', summaryA);
 
-  // Send summary to User A
+  // Check if User A already has a NEWER active session.
+  // If so, skip the Telegram summary to avoid confusing messages mid-flow.
+  const userAHasNewerSession = await hasNewerActiveSession(session.userAId, session.createdAt);
   const telegramIdA = decrypt(session.userA.telegramId);
-  await sendTelegramSummary(bot, telegramIdA, summaryA, 'USER_A');
 
-  // Ask User A about email
-  await bot.telegram.sendMessage(telegramIdA,
-    'הסשן הסתיים. רוצה לקבל את הסיכום גם למייל?\nהסיכום כולל את המסע הרגשי שלך, הכלים שתרגלתם, ומשאב קריאה מותאם.',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('✅ כן, שלח לי למייל', 'email_opt:yes')],
-      [Markup.button.callback('❌ לא תודה', 'email_opt:no')],
-    ])
-  );
+  if (!userAHasNewerSession) {
+    await sendTelegramSummary(bot, telegramIdA, summaryA, 'USER_A');
+
+    // Ask User A about email
+    await bot.telegram.sendMessage(telegramIdA,
+      'הסשן הסתיים. רוצה לקבל את הסיכום גם למייל?\nהסיכום כולל את המסע הרגשי שלך, הכלים שתרגלתם, ומשאב קריאה מותאם.',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('✅ כן, שלח לי למייל', 'email_opt:yes')],
+        [Markup.button.callback('❌ לא תודה', 'email_opt:no')],
+      ])
+    );
+  } else {
+    logger.info('Skipped Telegram summary for User A — newer active session exists', {
+      sessionId,
+      userAId: session.userAId,
+    });
+  }
 
   // Generate and send summary for User B (if exists)
   if (session.userB) {
@@ -110,17 +137,26 @@ export async function orchestrateSessionClose(
     const summaryB = await generateSummary(sessionId, 'USER_B', conversationHistory, topicCategory, userBLanguage);
     cacheSummary(sessionId, 'USER_B', summaryB);
 
+    const userBHasNewerSession = await hasNewerActiveSession(session.userBId!, session.createdAt);
     const telegramIdB = decrypt(session.userB.telegramId);
-    await sendTelegramSummary(bot, telegramIdB, summaryB, 'USER_B');
 
-    // Ask User B about email
-    await bot.telegram.sendMessage(telegramIdB,
-      'הסשן הסתיים. רוצה לקבל את הסיכום גם למייל?\nהסיכום כולל את המסע הרגשי שלך, הכלים שתרגלתם, ומשאב קריאה מותאם.',
-      Markup.inlineKeyboard([
-        [Markup.button.callback('✅ כן, שלח לי למייל', 'email_opt:yes')],
-        [Markup.button.callback('❌ לא תודה', 'email_opt:no')],
-      ])
-    );
+    if (!userBHasNewerSession) {
+      await sendTelegramSummary(bot, telegramIdB, summaryB, 'USER_B');
+
+      // Ask User B about email
+      await bot.telegram.sendMessage(telegramIdB,
+        'הסשן הסתיים. רוצה לקבל את הסיכום גם למייל?\nהסיכום כולל את המסע הרגשי שלך, הכלים שתרגלתם, ומשאב קריאה מותאם.',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('✅ כן, שלח לי למייל', 'email_opt:yes')],
+          [Markup.button.callback('❌ לא תודה', 'email_opt:no')],
+        ])
+      );
+    } else {
+      logger.info('Skipped Telegram summary for User B — newer active session exists', {
+        sessionId,
+        userBId: session.userBId,
+      });
+    }
 
     // Generate embedding for User B
     await generateSessionEmbedding({
@@ -216,6 +252,23 @@ async function sendTelegramSummary(
       }
     }
   }
+}
+
+/**
+ * Check if a user has a newer active (non-CLOSED, non-LOCKED) session
+ * created after the given session's createdAt.
+ * Used to avoid sending old session summaries into a new session's chat.
+ */
+async function hasNewerActiveSession(userId: string, afterDate: Date): Promise<boolean> {
+  const newerSession = await prisma.coupleSession.findFirst({
+    where: {
+      OR: [{ userAId: userId }, { userBId: userId }],
+      status: { notIn: ['CLOSED', 'LOCKED'] },
+      createdAt: { gt: afterDate },
+    },
+    select: { id: true },
+  });
+  return newerSession !== null;
 }
 
 function getMaxRiskLevel(levels: string[]): string {

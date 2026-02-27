@@ -80,8 +80,9 @@ export class SessionStateMachine {
 
   /**
    * Close idle sessions that have been PAUSED for longer than SESSION_EXPIRY_HOURS.
+   * Returns the list of session IDs that were successfully closed.
    */
-  static async closeExpiredSessions(expiryHours: number): Promise<number> {
+  static async closeExpiredSessions(expiryHours: number): Promise<string[]> {
     const cutoff = new Date(Date.now() - expiryHours * 60 * 60 * 1000);
 
     const expiredSessions = await prisma.coupleSession.findMany({
@@ -92,14 +93,14 @@ export class SessionStateMachine {
       select: { id: true },
     });
 
-    let closedCount = 0;
+    const closedIds: string[] = [];
     for (const session of expiredSessions) {
       try {
         await SessionStateMachine.transition(session.id, 'CLOSED', {
           reason: 'auto_close_expired',
           expiryHours,
         });
-        closedCount++;
+        closedIds.push(session.id);
       } catch (error) {
         logger.error('Failed to auto-close expired session', {
           sessionId: session.id,
@@ -108,10 +109,10 @@ export class SessionStateMachine {
       }
     }
 
-    if (closedCount > 0) {
-      logger.info(`Auto-closed ${closedCount} expired sessions`);
+    if (closedIds.length > 0) {
+      logger.info(`Auto-closed ${closedIds.length} expired sessions`);
     }
 
-    return closedCount;
+    return closedIds;
   }
 }

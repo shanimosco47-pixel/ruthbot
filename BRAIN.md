@@ -1,7 +1,7 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-02-28
+> Last updated: 2026-02-28 (V2.5 session close fix)
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
@@ -9,12 +9,31 @@
 ## Current Status: RUTH V2.4 — DEPLOYED ✅
 
 The bot is **live in production** on Render free tier (webhook mode).
-All 12 development phases complete + V2 behavioral tuning + V2.2 speed + V2.3 trainer fixes + **V2.4 training quality fixes**.
+All 12 development phases complete + V2 behavioral tuning + V2.2 speed + V2.3 trainer fixes + V2.4 training quality fixes + **V2.5 session close fix + architecture fix**.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **Last deploy:** 2026-02-28 — Commit `de076fe` — RUTH V2.4 training fixes
+- **Last deploy:** 2026-02-28 — Commit `de076fe` — RUTH V2.4 training fixes (V2.5 pending deploy)
 - **Training score:** 44 → 90.3 across 13 training runs
+
+### RUTH V2.5 Session Close & Architecture Fix (2026-02-28)
+- **Session summary appearing mid-flow BUG:** Fixed `orchestrateSessionClose()` firing for old sessions while user is in new session
+  - Root cause 1: `/stop` fires orchestration async → user starts new session → old summary arrives mid-flow
+  - Root cause 2: Periodic task queried ALL sessions closed in last 6 min (not just the ones it closed) → double-fire
+  - Root cause 3: No guard against duplicate orchestration
+- **Fix 1 — Atomic guard:** Added `closeOrchestrated` boolean to `CoupleSession` Prisma schema
+  - `orchestrateSessionClose()` now uses atomic `updateMany` with `closeOrchestrated: false` as compare-and-swap
+  - Prevents any duplicate orchestration regardless of trigger source
+- **Fix 2 — Periodic task:** `closeExpiredSessions()` now returns `string[]` (session IDs) instead of `number`
+  - Periodic task uses returned IDs directly — no more stale "recently closed" query
+- **Fix 3 — Newer session guard:** Before sending Telegram summary, checks `hasNewerActiveSession()`
+  - If user already has a newer active session, skips Telegram notification (embeddings/telemetry still run)
+- **Chat architecture fix** (commit `d898342`):
+  - Rewrote SESSION MODE and GUARDRAILS in system prompt to explicitly explain separate private chats
+  - Added 14 forbidden architecture phrases to `responseValidator.ts` with auto-correction
+  - Added architecture explanation to invite message in `callbackHandler.ts`
+- **Files modified:** `prisma/schema.prisma`, `sessionCloseOrchestrator.ts`, `sessionStateMachine.ts`, `index.ts`
+- **Tests:** 231 passing, 0 failing
 
 ### RUTH V2.4 Training Quality Fixes (2026-02-28)
 - **Draft double-question fix:** Removed extra `"מה דעתך?"` appended to draft responses in `messageHandler.ts`
@@ -216,11 +235,19 @@ ASYNC_COACHING (parallel solo mode for User A)
 - **Fix:** Message storage is fire-and-forget (non-blocking)
 - **Fix (V2.4):** Prompt caching reduces input tokens ~90% on repeated calls
 
-### 2. Bot Describing Architecture Wrong (FIXED)
-- **Problem:** Bot said "שיחה משותפת" / "שניכם יחד בשיחה אחת"
-- **Root cause:** System prompt said "Both partners may be in this session"
-- **Fix:** Rewrote SESSION MODE + added Guardrail #7 with explicit forbidden phrases in Hebrew
-- **Fix:** Updated startHandler User B landing, callbackHandler onboarding text
+### 2. Bot Describing Architecture Wrong — FIXED (V2.5)
+- **Problem:** Bot said "שיחה משותפת" / "שניכם יחד בשיחה אחת" / "אתם תהיו יחד בקבוצה משותפת"
+- **Root cause:** Old Guardrail #7 told Claude "The technical separation of chats is invisible to users" → Claude actively hid/denied the architecture
+- **Fix (3 layers):**
+  - Layer 1: Rewrote SESSION MODE + CHAT ARCHITECTURE section in system prompts with explicit forbidden phrases
+  - Layer 2: Added `replaceForbiddenPhrases()` in `responseValidator.ts` with 14 forbidden phrases + auto-correction
+  - Layer 3: Added architecture explanation to invite message in `callbackHandler.ts`
+
+### 2b. Session Summary Appearing Mid-Flow — FIXED (V2.5)
+- **Problem:** After clicking "להזמין עכשיו", session summary from old session appeared in chat
+- **Root cause:** `/stop` fires `orchestrateSessionClose()` async → user starts new session → old summary arrives
+- **Root cause 2:** Periodic task queried ALL recently closed sessions (not just ones it closed)
+- **Fix:** Atomic `closeOrchestrated` flag, `closeExpiredSessions()` returns IDs, `hasNewerActiveSession()` guard
 
 ### 3. Bot Insisting on Inviting Partner in Solo Mode (FIXED)
 - **Problem:** In ASYNC_COACHING mode, bot kept suggesting to invite partner
@@ -285,11 +312,13 @@ Same as `.env` with:
 2. ~~**Speed optimization**~~ — ✅ DONE (V2.2 combined risk+coaching)
 3. ~~**RUTH V2 fine-tuning**~~ — ✅ DONE (V2.3/V2.4 training score: 90.3)
 4. ~~**Deploy V2.4**~~ — ✅ DONE (2026-02-28, commit `de076fe`)
-5. **Continue training** — Run trainer_bot to validate V2.4 fixes (especially couple_full_flow)
-6. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
+5. ~~**Architecture fix + session close bug**~~ — ✅ DONE (V2.5, commits `d898342` + pending)
+6. **Deploy V2.5** — Push + deploy on Render
+7. **Continue training** — Run trainer_bot to validate V2.5 fixes (especially couple_full_flow)
+8. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
    - **Alternatives:** Lemon Squeezy (international), PayPlus/Tranzila (Israeli processors), Paddle
-7. **Resend email setup** — Sign up, get key, verify domain (code gracefully skips when not configured)
-8. **Real-world testing** — Test with actual Telegram conversations
+9. **Resend email setup** — Sign up, get key, verify domain (code gracefully skips when not configured)
+10. **Real-world testing** — Test with actual Telegram conversations
 
 ---
 
@@ -310,8 +339,9 @@ Same as `.env` with:
 
 ## Git State
 - **Branch:** master
-- **Last commit:** `de076fe` — RUTH V2.4: training quality fixes (2026-02-28)
-- **All 12 phases committed and merged + V2 → V2.4 iterations**
+- **Last commit:** (pending) — RUTH V2.5: session close fix + architecture fix
+- **Previous commits:** `a04e55b` (BRAIN.md update), `d898342` (architecture fix), `de076fe` (V2.4)
+- **All 12 phases committed and merged + V2 → V2.5 iterations**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
 

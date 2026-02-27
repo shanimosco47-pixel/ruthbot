@@ -133,22 +133,17 @@ function startPeriodicTasks(bot: Telegraf): void {
   // Auto-close expired PAUSED sessions (every 5 minutes)
   setInterval(async () => {
     try {
-      const closedCount = await SessionStateMachine.closeExpiredSessions(env.SESSION_EXPIRY_HOURS);
-      if (closedCount > 0) {
-        logger.info(`Periodic task: closed ${closedCount} expired sessions`);
+      // closeExpiredSessions returns the exact IDs it closed — no stale query needed.
+      const closedIds = await SessionStateMachine.closeExpiredSessions(env.SESSION_EXPIRY_HOURS);
+      if (closedIds.length > 0) {
+        logger.info(`Periodic task: closed ${closedIds.length} expired sessions`);
 
-        // Trigger session close orchestration for auto-closed sessions
-        const recentlyClosed = await prisma.coupleSession.findMany({
-          where: {
-            status: 'CLOSED',
-            closedAt: { gte: new Date(Date.now() - 6 * 60 * 1000) },
-          },
-          select: { id: true },
-        });
-        for (const session of recentlyClosed) {
-          orchestrateSessionClose(bot, session.id).catch((err) => {
+        // Trigger session close orchestration ONLY for the sessions we just closed.
+        // orchestrateSessionClose() has its own atomic guard (closeOrchestrated flag).
+        for (const sessionId of closedIds) {
+          orchestrateSessionClose(bot, sessionId).catch((err) => {
             logger.error('Session close orchestration failed', {
-              sessionId: session.id,
+              sessionId,
               error: err instanceof Error ? err.message : String(err),
             });
           });
