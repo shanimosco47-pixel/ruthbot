@@ -18,6 +18,26 @@ interface SummaryResult {
   emotionScoreEnd: number;
 }
 
+// In-memory summary cache — avoids regenerating summaries for email opt-in.
+// Summaries are generated at session close; if user opts into email within 30 min,
+// the cached version is reused instead of making another Claude API call.
+const summaryCache = new Map<string, { data: SummaryResult; timestamp: number }>();
+const SUMMARY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+export function getCachedSummary(sessionId: string, userRole: 'USER_A' | 'USER_B'): SummaryResult | null {
+  const key = `${sessionId}:${userRole}`;
+  const cached = summaryCache.get(key);
+  if (cached && Date.now() - cached.timestamp < SUMMARY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  summaryCache.delete(key);
+  return null;
+}
+
+function cacheSummary(sessionId: string, userRole: 'USER_A' | 'USER_B', data: SummaryResult): void {
+  summaryCache.set(`${sessionId}:${userRole}`, { data, timestamp: Date.now() });
+}
+
 /**
  * Orchestrate session close:
  * 1. Generate summaries for both users
@@ -66,9 +86,10 @@ export async function orchestrateSessionClose(
   // Determine topic category
   const topicCategory = (session.riskEvents[0]?.topicCategory || 'משהו שחשוב לי לשתף') as TopicCategory;
 
-  // Generate summary for User A
+  // Generate summary for User A (and cache for email opt-in)
   const userALanguage = session.userA.language || 'he';
   const summaryA = await generateSummary(sessionId, 'USER_A', conversationHistory, topicCategory, userALanguage);
+  cacheSummary(sessionId, 'USER_A', summaryA);
 
   // Send summary to User A
   const telegramIdA = decrypt(session.userA.telegramId);
@@ -87,6 +108,7 @@ export async function orchestrateSessionClose(
   if (session.userB) {
     const userBLanguage = session.userB.language || 'he';
     const summaryB = await generateSummary(sessionId, 'USER_B', conversationHistory, topicCategory, userBLanguage);
+    cacheSummary(sessionId, 'USER_B', summaryB);
 
     const telegramIdB = decrypt(session.userB.telegramId);
     await sendTelegramSummary(bot, telegramIdB, summaryB, 'USER_B');

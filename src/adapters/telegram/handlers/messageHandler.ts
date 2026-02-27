@@ -577,50 +577,59 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
   const topicCategory = (session.riskEvents[0]?.topicCategory || 'משהו שחשוב לי לשתף') as TopicCategory;
   const userRole = session.userAId === userId ? 'USER_A' : 'USER_B';
 
-  // Generate summary for email
-  const { callClaudeJSON } = await import('../../../services/ai/claudeClient');
-  const { buildSessionSummaryPrompt } = await import('../../../services/ai/systemPrompts');
-
-  const messages = await prisma.message.findMany({
-    where: { sessionId: session.id },
-    orderBy: { createdAt: 'asc' },
-    select: { senderRole: true, rawContent: true, messageType: true, createdAt: true },
-  });
-
-  const conversationHistory = messages
-    .filter((m) => m.rawContent)
-    .map((m) => {
-      let content: string;
-      try {
-        content = decrypt(m.rawContent!);
-      } catch {
-        content = m.rawContent!;
-      }
-      return {
-        role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
-        content,
-        timestamp: m.createdAt,
-      };
-    });
+  // Try cached summary first (generated at session close), fall back to API call
+  const { getCachedSummary } = await import('../../../core/orchestrator/sessionCloseOrchestrator');
+  const cached = getCachedSummary(session.id, userRole);
 
   let summary: { personalSummary: string; sharedCommitments: string; encouragement: string };
-  try {
-    summary = await callClaudeJSON<{ personalSummary: string; sharedCommitments: string; encouragement: string }>({
-      systemPrompt: buildSessionSummaryPrompt({
-        userRole,
-        conversationHistory,
-        language: 'he',
-        topicCategory,
-      }),
-      userMessage: 'Generate the session summary.',
-      sessionId: session.id,
+  if (cached) {
+    summary = cached;
+    logger.info('Using cached summary for email', { sessionId: session.id, userRole });
+  } else {
+    // Cache miss (e.g., server restart between close and email opt-in) — regenerate
+    const { callClaudeJSON } = await import('../../../services/ai/claudeClient');
+    const { buildSessionSummaryPrompt } = await import('../../../services/ai/systemPrompts');
+
+    const messages = await prisma.message.findMany({
+      where: { sessionId: session.id },
+      orderBy: { createdAt: 'asc' },
+      select: { senderRole: true, rawContent: true, messageType: true, createdAt: true },
     });
-  } catch {
-    summary = {
-      personalSummary: 'הסשן הסתיים. תודה שהשתתפת.',
-      sharedCommitments: 'לא זוהו מחויבויות ספציפיות בסשן זה.',
-      encouragement: 'כל שיחה היא צעד קדימה. אתם בדרך הנכונה. ❤️',
-    };
+
+    const conversationHistory = messages
+      .filter((m) => m.rawContent)
+      .map((m) => {
+        let content: string;
+        try {
+          content = decrypt(m.rawContent!);
+        } catch {
+          content = m.rawContent!;
+        }
+        return {
+          role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
+          content,
+          timestamp: m.createdAt,
+        };
+      });
+
+    try {
+      summary = await callClaudeJSON<{ personalSummary: string; sharedCommitments: string; encouragement: string }>({
+        systemPrompt: buildSessionSummaryPrompt({
+          userRole,
+          conversationHistory,
+          language: 'he',
+          topicCategory,
+        }),
+        userMessage: 'Generate the session summary.',
+        sessionId: session.id,
+      });
+    } catch {
+      summary = {
+        personalSummary: 'הסשן הסתיים. תודה שהשתתפת.',
+        sharedCommitments: 'לא זוהו מחויבויות ספציפיות בסשן זה.',
+        encouragement: 'כל שיחה היא צעד קדימה. אתם בדרך הנכונה. ❤️',
+      };
+    }
   }
 
   const userName = user?.name ? decrypt(user.name) : ctx.from?.first_name || 'שם לא ידוע';

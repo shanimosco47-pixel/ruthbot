@@ -1,9 +1,14 @@
 import { prisma } from '../../db/client';
-import { callClaude } from '../ai/claudeClient';
+import { callClaudeJSON } from '../ai/claudeClient';
 import { logger } from '../../utils/logger';
 import { decrypt } from '../../utils/encryption';
 import { env } from '../../config/env';
 import type { TopicCategory } from '../../config/constants';
+
+interface SessionSummaryWithTags {
+  summary: string;
+  emotion_tags: string[];
+}
 import OpenAI from 'openai';
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
@@ -61,52 +66,44 @@ export async function generateSessionEmbedding(params: {
       })
       .join('\n');
 
-    const summary = await callClaude({
-      systemPrompt: `You are generating a semantic summary of a couples mediation session for pattern recognition.
+    // Single Claude call for both summary and emotion tags (was 2 separate calls)
+    let summary: string;
+    let emotionTags: string[];
+
+    try {
+      const result = await callClaudeJSON<SessionSummaryWithTags>({
+        systemPrompt: `You are generating a semantic summary of a couples mediation session for pattern recognition.
 
 RULES:
 - Focus on COMMUNICATION PATTERNS, not specific grievances.
 - Identify dominant emotions (fear, loneliness, rejection, frustration, etc.).
 - Note any recurring conflict themes.
-- Keep it under 200 words.
+- Keep the summary under 200 words.
 - Do NOT include any PII, names, or identifiable information.
-- Output in English for consistent embedding.`,
-      userMessage: `Session topic: ${topicCategory}\n\nConversation:\n${conversationText}`,
-      maxTokens: 512,
-      sessionId,
-    });
+- Output in English for consistent embedding.
 
-    // Extract dominant emotion tags
-    const emotionTagsResponse = await callClaude({
-      systemPrompt: `Extract 2-4 dominant emotion tags from this session summary. Return ONLY a JSON array of strings. Example: ["fear_of_abandonment", "loneliness", "need_for_recognition"]`,
-      userMessage: summary,
-      maxTokens: 128,
-      sessionId,
-    });
+OUTPUT FORMAT:
+Return ONLY valid JSON:
+{
+  "summary": "the semantic summary text",
+  "emotion_tags": ["tag1", "tag2"]
+}
 
-    let emotionTags: string[] = [];
-    try {
-      // Extract JSON array from response (Claude may wrap in markdown)
-      let jsonStr = emotionTagsResponse.trim();
-      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1].trim();
-      }
-      // Also try to extract a JSON array if embedded in text
-      const arrayMatch = jsonStr.match(/\[[\s\S]*?\]/);
-      if (arrayMatch) {
-        jsonStr = arrayMatch[0];
-      }
-      const parsed = JSON.parse(jsonStr);
-      if (Array.isArray(parsed) && parsed.every((t: unknown) => typeof t === 'string')) {
-        emotionTags = parsed;
-      } else {
-        emotionTags = ['unclassified'];
-      }
+emotion_tags: 2-4 dominant emotion patterns, e.g.: "fear_of_abandonment", "loneliness", "need_for_recognition", "frustration", "rejection", "betrayal", "control", "disconnection".`,
+        userMessage: `Session topic: ${topicCategory}\n\nConversation:\n${conversationText}`,
+        maxTokens: 512,
+        sessionId,
+      });
+
+      summary = result.summary;
+      emotionTags = Array.isArray(result.emotion_tags) && result.emotion_tags.length > 0
+        ? result.emotion_tags
+        : ['unclassified'];
     } catch {
-      // Last resort: split comma-separated values if JSON fails
-      const commaMatch = emotionTagsResponse.match(/[\w_]+/g);
-      emotionTags = commaMatch && commaMatch.length >= 2 ? commaMatch.slice(0, 4) : ['unclassified'];
+      // Fallback: if JSON parsing fails, the summary is unusable for embedding
+      logger.warn('Session summary JSON parse failed, using fallback', { sessionId });
+      summary = `Session about ${topicCategory}. Communication patterns could not be analyzed.`;
+      emotionTags = ['unclassified'];
     }
 
     // Find telemetry record — required for FK constraint

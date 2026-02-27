@@ -27,11 +27,13 @@ export async function classifyRisk(params: {
 }): Promise<RiskAssessment> {
   const { message, sessionId, senderRole } = params;
 
+  // Risk engine prompt is fully static — cache the entire thing
   const systemPrompt = buildRiskEnginePrompt();
 
   try {
     const raw = await callClaudeJSON<Record<string, unknown>>({
-      systemPrompt,
+      staticSystemPrefix: systemPrompt,
+      systemPrompt: '',
       userMessage: message,
       maxTokens: 512,
       sessionId,
@@ -124,7 +126,7 @@ export async function classifyRiskAndCoach(params: {
 }): Promise<CombinedRiskCoachingResult> {
   const { message, sessionId, senderRole, userRole, language, conversationHistory, patternSummaries, sessionStatus, turnCount, shouldDraft, isFrustrated } = params;
 
-  const systemPrompt = buildCombinedRiskCoachingPrompt({
+  const { staticPart, dynamicPart } = buildCombinedRiskCoachingPrompt({
     userRole,
     language,
     conversationHistory,
@@ -138,7 +140,8 @@ export async function classifyRiskAndCoach(params: {
 
   try {
     const raw = await callClaudeJSON<Record<string, unknown>>({
-      systemPrompt,
+      staticSystemPrefix: staticPart,
+      systemPrompt: dynamicPart,
       userMessage: message,
       maxTokens: 1500,
       sessionId,
