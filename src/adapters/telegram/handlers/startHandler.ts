@@ -109,7 +109,7 @@ async function handleDeepLinkStart(
   await ctx.reply(DISCLAIMER_HE, {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
-      [Markup.button.callback('📜 קראתי והבנתי — אני מוכן/ה להתחיל', `consent_accept:${sessionId}`)],
+      [Markup.button.callback('✅ אני מבין/ה ומסכים/ה', `consent_accept:${sessionId}`)],
     ]),
   });
 

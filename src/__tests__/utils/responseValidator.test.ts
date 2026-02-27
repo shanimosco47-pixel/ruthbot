@@ -399,7 +399,7 @@ describe('Component 4: Overall Success', () => {
 
     it('should contain RULE 2 one question', () => {
       expect(prompt).toContain('RULE 2: ONE QUESTION ONLY');
-      expect(prompt).toContain('Max 1 question');
+      expect(prompt).toContain('EXACTLY 1 question mark');
     });
 
     it('should contain RULE 3 fast intake', () => {
@@ -431,7 +431,7 @@ describe('Component 4: Overall Success', () => {
     });
 
     it('should contain max 1 question per message output rule', () => {
-      expect(prompt).toContain('Max 1 question per message');
+      expect(prompt).toContain('EXACTLY 1 question mark (?) per message');
     });
   });
 

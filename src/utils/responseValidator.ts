@@ -29,10 +29,32 @@ export function checkResponseQuality(response: string): string {
   return cleaned;
 }
 
+// Hebrew imperative/request patterns that function as implicit questions.
+// After the first explicit question (?), these are stripped to enforce the single-question rule.
+const IMPLICIT_QUESTION_PATTERNS = [
+  /^ספר/,
+  /^שתף/,
+  /^תאר/,
+  /^תן/,
+  /^תני/,
+  /^בוא\/י/,
+  /^בואי/,
+  /^נסה/,
+  /^נסי/,
+  /^חשב/,
+  /^חשבי/,
+  /^דמיין/,
+  /^דמייני/,
+  /^שאל/,
+  /^שאלי/,
+  /^חפש/,
+  /^חפשי/,
+];
+
 /**
  * Remove all questions except the first one.
- * Splits by sentence boundaries (? ! .) to handle multiple questions
- * on the same line or across lines.
+ * Handles both explicit questions (?) and implicit Hebrew imperatives
+ * that function as questions (e.g., "ספרי לי עוד", "שתף אותי").
  */
 function removeExtraQuestions(text: string): string {
   // Split into sentences by common Hebrew/punctuation boundaries
@@ -45,18 +67,32 @@ function removeExtraQuestions(text: string): string {
     const trimmed = sentence.trim();
     if (!trimmed) continue;
 
-    if (trimmed.includes('?')) {
+    const hasExplicitQuestion = trimmed.includes('?');
+    const hasImplicitQuestion = !hasExplicitQuestion && isImplicitQuestion(trimmed);
+
+    if (hasExplicitQuestion || hasImplicitQuestion) {
       if (!foundFirstQuestion) {
         resultSentences.push(trimmed);
         foundFirstQuestion = true;
       }
-      // Skip subsequent sentences with questions
+      // Skip subsequent sentences with questions (explicit or implicit)
     } else {
       resultSentences.push(trimmed);
     }
   }
 
   return resultSentences.join(' ').trim();
+}
+
+/**
+ * Detect Hebrew imperative statements that function as implicit questions.
+ * Example: "ספרי לי עוד" = "Tell me more" = implicit question.
+ */
+function isImplicitQuestion(sentence: string): boolean {
+  const words = sentence.split(/\s+/);
+  if (words.length === 0) return false;
+  const firstWord = words[0];
+  return IMPLICIT_QUESTION_PATTERNS.some((pattern) => pattern.test(firstWord));
 }
 
 /**

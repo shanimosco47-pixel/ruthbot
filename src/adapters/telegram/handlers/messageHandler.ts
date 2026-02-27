@@ -370,8 +370,10 @@ async function handleActiveSessionMessage(
         ])
       );
     } else if (result.isDraft) {
+      // Draft phase — coaching already contains the question from Claude prompt.
+      // Do NOT append extra questions (causes Rule 2 violation: 2 questions instead of 1).
       await ctx.reply(
-        `${result.coachingResponse}\n\nמה דעתך?`,
+        result.coachingResponse,
         Markup.inlineKeyboard([
           [Markup.button.callback('✅ שלח', `draft:approve:${sessionContext.sessionId}`)],
           [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionContext.sessionId}`)],
@@ -486,9 +488,10 @@ async function handleCoachingMessage(
         ])
       );
     } else if (result.isDraft) {
-      // Draft phase — send coaching text + buttons in single message
+      // Draft phase — coaching already contains the question from Claude prompt.
+      // Do NOT append extra questions (causes Rule 2 violation: 2 questions instead of 1).
       await ctx.reply(
-        `${result.coachingResponse}\n\nמה דעתך?`,
+        result.coachingResponse,
         Markup.inlineKeyboard([
           [Markup.button.callback('✅ שלח', `draft:approve:${sessionId}`)],
           [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionId}`)],

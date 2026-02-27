@@ -216,6 +216,25 @@ TODO שנוצר מכובע כלשהו — רשום אותו בקוד ודווח 
 
 ---
 
+## Trainer Bot — System Prompt Evolution
+
+Ruth's system prompt (`src/services/ai/systemPrompts.ts`) is continuously improved by a **separate trainer project** at `C:\Users\shani\OneDrive\trainer_bot`.
+
+The trainer runs simulated clinical sessions (Hebrew conversations with personas of various attachment styles), scores Ruth's therapeutic quality, and applies additive prompt fixes when issues are found.
+
+**Rules when editing `systemPrompts.ts`:**
+- **ADDITIVE ONLY** — never delete existing prompt instructions. Add sub-rules beneath existing ones.
+- **Backup first** — save a timestamped copy to `.prompt-history/` before any edit.
+- **Log changes** — update `.prompt-history/changelog.md` (technical diff) and `.prompt-history/evolution.md` (clinical reasoning).
+- **Don't restructure the prompt** — the layered structure (base rules + softening override + avoidant adaptation, etc.) reflects tested clinical improvements. Refactoring risks breaking validated behavior.
+
+**`.prompt-history/` directory — do not delete:**
+- `changelog.md` — exact diffs of every prompt change
+- `evolution.md` — clinical reasoning grounded in Gottman, EFT, and Imago frameworks
+- `systemPrompts_*.ts` — timestamped backups before each edit
+
+---
+
 ## מסמכי הפרויקט (קרא לפני כל דבר)
 ```
 /docs/CoupleBot_PRD_v2.docx          ← PRD ראשי
