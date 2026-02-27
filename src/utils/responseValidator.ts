@@ -7,12 +7,36 @@ import type { ConversationMessage } from '../types';
 const MAX_WORDS = 55;
 const MAX_QUESTIONS = 1;
 
+// Forbidden phrases that misrepresent the two-separate-chats architecture.
+// If Claude generates any of these, they are replaced with the correct explanation.
+const FORBIDDEN_ARCHITECTURE_PHRASES = [
+  'קבוצה משותפת',
+  'תהיו יחד',
+  'שניכם ביחד',
+  'שיחה משותפת',
+  'צ\'אט משותף',
+  'שניכם בשיחה אחת',
+  'שניהם יחד',
+  'שניכם יחד',
+  'שניהם בשיחה',
+  'שניכם בשיחה',
+  'ביחד בקבוצה',
+  'יחד בקבוצה',
+  'בצ\'אט אחד',
+  'בשיחה אחת',
+];
+
+const ARCHITECTURE_CORRECTION = 'כל אחד מדבר איתי בצ\'אט פרטי נפרד. אף אחד לא רואה מה השני כותב. אני המתווכת — עוזרת לנסח ומעבירה רק מה שאושר.';
+
 /**
- * Enforce word limit + one-question rule on Ruth's response.
+ * Enforce word limit + one-question rule + forbidden phrases on Ruth's response.
  * Returns cleaned response text.
  */
 export function checkResponseQuality(response: string): string {
   let cleaned = response;
+
+  // Enforce forbidden architecture phrases — replace with correct explanation
+  cleaned = replaceForbiddenPhrases(cleaned);
 
   // Enforce single question rule: keep only the first question mark sentence
   const questionCount = (cleaned.match(/\?/g) || []).length;
@@ -27,6 +51,34 @@ export function checkResponseQuality(response: string): string {
   }
 
   return cleaned;
+}
+
+/**
+ * Replace forbidden architecture phrases with the correct explanation.
+ * Only replaces the first occurrence and appends the correction.
+ */
+function replaceForbiddenPhrases(text: string): string {
+  for (const phrase of FORBIDDEN_ARCHITECTURE_PHRASES) {
+    if (text.includes(phrase)) {
+      // Find the sentence containing the forbidden phrase and replace it
+      const sentences = text.split(/(?<=[.!?\n])\s*/);
+      const correctedSentences = sentences.map((sentence) => {
+        if (FORBIDDEN_ARCHITECTURE_PHRASES.some((p) => sentence.includes(p))) {
+          return ARCHITECTURE_CORRECTION;
+        }
+        return sentence;
+      });
+      // Deduplicate if multiple sentences were corrected
+      const seen = new Set<string>();
+      const deduped = correctedSentences.filter((s) => {
+        if (seen.has(s)) return false;
+        seen.add(s);
+        return true;
+      });
+      return deduped.join(' ').trim();
+    }
+  }
+  return text;
 }
 
 // Hebrew imperative/request patterns that function as implicit questions.

@@ -190,10 +190,16 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
   // flow is: User A manually forwards the invite link to User B via any app.
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Step 1: Show the ready-to-forward package (invitation + link together)
+  // Step 1: Show the ready-to-forward package (invitation + link + architecture explanation)
+  const architectureExplanation =
+    `💡 איך זה עובד: כל אחד מדבר איתי בצ'אט פרטי נפרד. ` +
+    `אף אחד לא רואה מה השני כותב. ` +
+    `אני עוזרת לנסח ומעבירה רק מה שאושר.`;
+
   const forwardableText =
     `"${invitationMessage}"\n\n` +
-    `🔗 לינק להצטרפות לסשן: ${link}`;
+    architectureExplanation + `\n\n` +
+    `🔗 לחצ/י כאן כדי להתחיל: ${link}`;
 
   await ctx.reply(`📋 הודעת ההזמנה מוכנה — העתק/י ושלח/י לבן/בת הזוג:\n\n${forwardableText}`);
 
