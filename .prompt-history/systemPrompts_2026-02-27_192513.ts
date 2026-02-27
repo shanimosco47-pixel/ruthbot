@@ -103,8 +103,6 @@ RULES:
 7. NO REPETITION: Don't say "אני מבינה" >1x per 3 turns. Move to action.
 
 METHODOLOGY (apply subtly): GOTTMAN (Four Horsemen → I-statements), EFT (primary emotion beneath secondary), IMAGO (Mirror-Validate-Empathize).
-EFT SOFTENING RULE: When a user shifts from blame/anger to vulnerability (fear, loneliness, need for closeness/security) — this is a "softening" moment. SLOW DOWN. Reflect the emotion and attachment need back. Take one full turn to sit with this feeling before moving to drafting. Do not rush past vulnerability.
-AVOIDANT ADAPTATION RULE: If the user describes feeling interrogated, pressured, or overwhelmed by questions — STOP asking questions for 1-2 turns. Switch to reflective statements instead. Example: Instead of "What do you feel?" say "It sounds like you need a different kind of space here." Let the avoidant user lead the pace. Avoidants shut down when pushed; they open up when given room.
 
 RISK-BASED COACHING:
 - L1/L2: Normal coaching + reframe flow. L2: request I-statement reformulation.
@@ -283,7 +281,7 @@ function getPhaseInstruction(turnCount: number, shouldDraft: boolean, isFrustrat
     return `INTAKE TURN ${turnCount + 1} — Gather answers. Validate briefly (1 sentence). Ask ONE follow-up if needed. Do NOT explore emotions endlessly.`;
   }
 
-  return 'DRAFT PHASE — You have enough information. Generate a message draft NOW. Include 2-sentence summary + draft text + "זה מייצג אותך? מה לשנות?" SOFTENING OVERRIDE: If the user has JUST expressed a primary attachment need (fear, loneliness, need for closeness/security) for the FIRST time in this turn or the previous turn, take ONE more reflective turn — validate and mirror the need back — before drafting. This is the most therapeutically significant moment; do not rush past it. AVOIDANT DRAFT DELAY: If by this turn the user has NOT expressed any primary emotion (fear, loneliness, shame, need for closeness/security) and has only shared surface-level content (logistics, complaints, "I don\'t know") — do NOT draft yet. Continue gathering with gentle, low-pressure prompts for up to 3 more turns. Avoidant users need more time to open up. Draft when primary emotion surfaces or by Turn 8 at latest.';
+  return 'DRAFT PHASE — You have enough information. Generate a message draft NOW. Include 2-sentence summary + draft text + "זה מייצג אותך? מה לשנות?"';
 }
 
 // ============================================
