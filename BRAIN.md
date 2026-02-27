@@ -1,19 +1,42 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-02-23
+> Last updated: 2026-02-28
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V2.2 + INVITE-DELIVERY BUG FIX — READY TO DEPLOY
+## Current Status: RUTH V2.4 — DEPLOYED ✅
 
 The bot is **live in production** on Render free tier (webhook mode).
-All 12 development phases complete + **RUTH V2 behavioral tuning** + **V2.2 speed optimization** applied.
+All 12 development phases complete + V2 behavioral tuning + V2.2 speed + V2.3 trainer fixes + **V2.4 training quality fixes**.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **Last deploy:** Commit `64b199b` — RUTH V2 behavioral update
+- **Last deploy:** 2026-02-28 — Commit `de076fe` — RUTH V2.4 training fixes
+- **Training score:** 44 → 90.3 across 13 training runs
+
+### RUTH V2.4 Training Quality Fixes (2026-02-28)
+- **Draft double-question fix:** Removed extra `"מה דעתך?"` appended to draft responses in `messageHandler.ts`
+  - Root cause: draft phase appended question on top of Claude's already-included question → RULE 2 violation
+  - Fixed in TWO locations: `handleActiveSessionMessage` and `handleCoachingMessage`
+- **Implicit question detection:** Added Hebrew imperative patterns to `responseValidator.ts`
+  - Patterns: ספרי לי, שתפי אותי, תני דוגמה, דמייני, etc.
+  - `isImplicitQuestion()` + `IMPLICIT_QUESTION_PATTERNS` array
+  - `removeExtraQuestions()` now strips implicit questions after first explicit `?`
+- **Prompt strengthening:** RULE 2 upgraded to "EXACTLY 1 question mark (?)" in 3 locations in `systemPrompts.ts`
+- **User B consent button:** Standardized to `✅ אני מבין/ה ומסכים/ה` (was `📜 קראתי והבנתי — אני מוכן/ה להתחיל`)
+  - This was root cause of couple_full_flow cascade failure
+- **Prompt caching:** Added Anthropic `cache_control: { type: 'ephemeral' }` to `claudeClient.ts`
+  - System prompt split into static/dynamic parts via `SplitSystemPrompt` interface
+  - ~90% input token savings on repeated calls
+- **Summary caching:** In-memory 30-min TTL cache in `sessionCloseOrchestrator.ts` for email opt-in
+- **Memory service optimization:** Combined 2 Claude calls into 1 `callClaudeJSON` in `memoryService.ts`
+- **Tests:** 231 passing, 0 failing
+
+### RUTH V2.3 Trainer Bot Fixes (2026-02-25)
+- First round of trainer bot compatibility fixes
+- Commits: `8bcf5c9`, `bfe75c9`, `7a1fbba`
 
 ### RUTH V2.2 Speed Optimization (2026-02-23)
 - **Combined risk+coaching:** Single Claude API call replaces 2 sequential calls
@@ -30,7 +53,6 @@ All 12 development phases complete + **RUTH V2 behavioral tuning** + **V2.2 spee
 - **Removed:** `handleHighRisk()` function (redundant — combined call handles L3/L3_PLUS)
 - **New tests:** Integration tests + Raz scenario (≤8 turns verification)
   - `src/__tests__/integration/conversationFlow.test.ts`
-- **Tests:** 231 passing, 0 failing
 
 ### RUTH V2 Behavioral Changes (2026-02-21)
 - **System Prompt:** Replaced with RUTH V2 BEHAVIORAL OVERRIDE
@@ -187,12 +209,12 @@ ASYNC_COACHING (parallel solo mode for User A)
 
 ## Known Issues & Fixes Applied
 
-### 1. Response Time (~10-15 seconds)
-- **Root cause:** 2 sequential Claude Sonnet API calls (risk ~3s + coaching ~7s)
-- **Partial fix applied:** Risk classification + DB queries run in parallel via Promise.all
-- **Partial fix applied:** Message storage is fire-and-forget (non-blocking)
-- **TODO:** Combine risk + coaching into single Claude call (would halve response time)
-- **TODO:** Add Telegram "typing" indicator while processing
+### 1. Response Time — FIXED (V2.2)
+- **Root cause:** Was 2 sequential Claude Sonnet API calls (risk ~3s + coaching ~7s)
+- **Fix:** Combined into single `classifyRiskAndCoach()` call (~5-8s total)
+- **Fix:** Risk classification + DB queries run in parallel via Promise.all
+- **Fix:** Message storage is fire-and-forget (non-blocking)
+- **Fix (V2.4):** Prompt caching reduces input tokens ~90% on repeated calls
 
 ### 2. Bot Describing Architecture Wrong (FIXED)
 - **Problem:** Bot said "שיחה משותפת" / "שניכם יחד בשיחה אחת"
@@ -260,24 +282,36 @@ Same as `.env` with:
 ## Pending Work (Priority Order)
 
 1. ~~**Invite delivery bug fix**~~ — ✅ DONE (2026-02-24)
-   - Old: "✉️ העתק ושלח" was ambiguous — users assumed bot sent automatically
-   - Fix: Explicit ⚠️ warning + "הבוט לא שולח אוטומטית" + 📤 Telegram share button
-   - File: `src/adapters/telegram/handlers/callbackHandler.ts` → `handleTtlChoice()`
-1. ~~**Speed optimization**~~ — ✅ DONE (combined risk+coaching call)
-2. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
+2. ~~**Speed optimization**~~ — ✅ DONE (V2.2 combined risk+coaching)
+3. ~~**RUTH V2 fine-tuning**~~ — ✅ DONE (V2.3/V2.4 training score: 90.3)
+4. ~~**Deploy V2.4**~~ — ✅ DONE (2026-02-28, commit `de076fe`)
+5. **Continue training** — Run trainer_bot to validate V2.4 fixes (especially couple_full_flow)
+6. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
    - **Alternatives:** Lemon Squeezy (international), PayPlus/Tranzila (Israeli processors), Paddle
-3. **Resend email setup** — Sign up, get key, verify domain (code gracefully skips when not configured)
-4. ~~**Testing**~~ — ✅ DONE (231 tests passing, integration tests + Raz scenario added)
-5. ~~**RUTH V2 fine-tuning**~~ — ✅ DONE (Raz scenario verified ≤5 turns to draft)
-6. **Deploy V2.2** — Push to GitHub + redeploy on Render
-7. **Real-world testing** — Test with actual Telegram conversations
+7. **Resend email setup** — Sign up, get key, verify domain (code gracefully skips when not configured)
+8. **Real-world testing** — Test with actual Telegram conversations
 
 ---
 
+## Trainer Bot Integration
+
+- **Location:** `C:\Users\shani\OneDrive\trainer_bot`
+- **How it works:** Sends real Telegram messages to the live bot via Telethon (MTProto)
+- **Validates:** RUTH V2 rules (word count, questions, buttons, forbidden phrases)
+- **5 predefined scenarios:** solo_standard, frustration_detection, couple_full_flow, extended_deep_conversation, eft_dyadic
+- **8 personas:** anxious pursuer, avoidant withdrawer, acute crisis, skeptic, financial conflict, parenting clash, boundary violator, deep emotional
+- **Deploy required:** YES — trainer tests the LIVE deployed bot, not local code
+- **Button alignment verified:** All button texts in trainer scenarios match Ruth's code (verified 2026-02-28)
+- **Key files with hardcoded expectations:**
+  - `validator.py` — rules, word limits, button substrings
+  - `scenarios/predefined.py` — exact button labels per step
+  - `workflows/ruth_issues.json` — issue tracker
+- **Training log:** `ruth_training_log.md` (in couplebot repo)
+
 ## Git State
 - **Branch:** master
-- **Last commit:** pending — "RUTH V2.2: speed optimization + integration tests"
-- **All 12 phases committed and merged + RUTH V2 behavioral tuning**
+- **Last commit:** `de076fe` — RUTH V2.4: training quality fixes (2026-02-28)
+- **All 12 phases committed and merged + V2 → V2.4 iterations**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
 
