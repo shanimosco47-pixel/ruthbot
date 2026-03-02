@@ -40,6 +40,11 @@ export class SessionStateMachine {
       updateData.closedAt = new Date();
     }
 
+    // Reset idle reminder counter on PAUSED transitions
+    if (newStatus === 'PAUSED' || (currentStatus === 'PAUSED' && newStatus === 'ACTIVE')) {
+      updateData.idleRemindersSent = 0;
+    }
+
     await prisma.coupleSession.update({
       where: { id: sessionId },
       data: updateData,

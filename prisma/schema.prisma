@@ -58,6 +58,9 @@ model CoupleSession {
   // Close orchestration guard (prevents double summary delivery)
   closeOrchestrated       Boolean        @default(false) @map("close_orchestrated")
 
+  // Idle reminder tracking (prevents repeated reminders while PAUSED)
+  idleRemindersSent       Int            @default(0) @map("idle_reminders_sent")
+
   // Timestamps
   createdAt               DateTime       @default(now()) @map("created_at")
   updatedAt               DateTime       @updatedAt @map("updated_at")

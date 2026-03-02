@@ -292,14 +292,15 @@ function startPeriodicTasks(bot: Telegraf): void {
   // Send reminders to PAUSED sessions before auto-close (every 5 minutes)
   setInterval(async () => {
     try {
-      // Sessions paused for more than half the expiry time get a reminder
+      // Sessions paused for more than half the expiry time get a reminder (only if not already reminded enough)
       const reminderThreshold = new Date(Date.now() - (env.SESSION_EXPIRY_HOURS * 60 * 60 * 1000) / 2);
       const pausedSessions = await prisma.coupleSession.findMany({
         where: {
           status: 'PAUSED',
           updatedAt: { lt: reminderThreshold },
+          idleRemindersSent: { lt: env.MAX_IDLE_REMINDERS },
         },
-        select: { id: true, userAId: true, userBId: true },
+        select: { id: true, userAId: true, userBId: true, idleRemindersSent: true },
       });
 
       for (const session of pausedSessions) {
@@ -309,6 +310,12 @@ function startPeriodicTasks(bot: Telegraf): void {
           session,
           `⏰ הסשן שלכם בהשהיה כבר זמן מה. אם לא תחזרו תוך ${hoursLeft} שעות, הסשן ייסגר אוטומטית.\n\nשלחו הודעה כדי להמשיך.`
         );
+
+        // Track that we sent a reminder so we don't spam
+        await prisma.coupleSession.update({
+          where: { id: session.id },
+          data: { idleRemindersSent: session.idleRemindersSent + 1 },
+        });
       }
     } catch (error) {
       logger.error('Paused session reminder error', {
