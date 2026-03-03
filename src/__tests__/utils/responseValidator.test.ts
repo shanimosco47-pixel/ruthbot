@@ -198,7 +198,7 @@ describe('Component 2: Response Quality', () => {
 
   // Test 2.3: Perspective Clarity (7 points)
   describe('Test 2.3: Perspective Clarity', () => {
-    it('should have perspective prefix rule in system prompt', () => {
+    it('should have anti-side-taking rule in system prompt', () => {
       const prompt = buildCoachingPrompt({
         userRole: 'USER_A',
         language: 'he',
@@ -211,8 +211,8 @@ describe('Component 2: Response Quality', () => {
         shouldDraft: false,
         isFrustrated: false,
       });
-      expect(prompt).toContain('אתה מעריך שהיא הרגישה');
-      expect(prompt).toContain('אתה מרגיש');
+      expect(prompt).toContain('Never take sides');
+      expect(prompt).toContain('את הרגשת');
     });
   });
 });
@@ -377,7 +377,7 @@ describe('Component 4: Overall Success', () => {
     });
   });
 
-  // Test 4.3: System Prompt Rules Verification
+  // Test 4.3: System Prompt Rules Verification (V3)
   describe('Test 4.3: System Prompt Rules', () => {
     const prompt = buildCoachingPrompt({
       userRole: 'USER_A',
@@ -392,46 +392,44 @@ describe('Component 4: Overall Success', () => {
       isFrustrated: false,
     });
 
-    it('should contain RULE 1 word limit', () => {
-      expect(prompt).toContain('RULE 1: WORD LIMIT');
-      expect(prompt).toContain('max 55');
+    it('should contain word limit rule', () => {
+      expect(prompt).toContain('Max 55 Hebrew words');
     });
 
-    it('should contain RULE 2 one question', () => {
-      expect(prompt).toContain('RULE 2: ONE QUESTION ONLY');
-      expect(prompt).toContain('EXACTLY 1 question mark');
+    it('should contain question limit rule', () => {
+      expect(prompt).toContain('At most 1 question mark per message');
     });
 
-    it('should contain RULE 3 fast intake', () => {
-      expect(prompt).toContain('RULE 3: FAST INTAKE');
+    it('should contain no raw forwarding rule', () => {
+      expect(prompt).toContain('Never forward raw messages');
     });
 
-    it('should contain RULE 4 draft by turn 5', () => {
-      expect(prompt).toContain('RULE 4: DRAFT BY TURN 5');
+    it('should contain no side-taking rule', () => {
+      expect(prompt).toContain('Never take sides');
     });
 
-    it('should contain RULE 5 frustration', () => {
-      expect(prompt).toContain('RULE 5: FRUSTRATION DETECTOR');
+    it('should contain L4 safety rule', () => {
+      expect(prompt).toContain('Never continue mediation after L4 safety trigger');
     });
 
-    it('should contain RULE 6 perspective', () => {
-      expect(prompt).toContain('RULE 6: PERSPECTIVE CLARITY');
+    it('should contain no clinical labels rule', () => {
+      expect(prompt).toContain('Never diagnose or use clinical labels');
     });
 
-    it('should contain RULE 7 no repetition', () => {
-      expect(prompt).toContain('RULE 7: NO REPETITION');
+    it('should contain priority hierarchy', () => {
+      expect(prompt).toContain('PRIORITY ORDER when rules conflict');
     });
 
-    it('should contain RUTH V2 BEHAVIORAL OVERRIDE', () => {
-      expect(prompt).toContain('RUTH V2 BEHAVIORAL OVERRIDE');
+    it('should contain RUTH V3 COACHING header', () => {
+      expect(prompt).toContain('RUTH V3 COACHING');
     });
 
     it('should contain output format with 55 word limit', () => {
       expect(prompt).toContain('Max 55 Hebrew words');
     });
 
-    it('should contain max 1 question per message output rule', () => {
-      expect(prompt).toContain('EXACTLY 1 question mark (?) per message');
+    it('should contain at most 1 question per message output rule', () => {
+      expect(prompt).toContain('At most 1 question mark');
     });
   });
 

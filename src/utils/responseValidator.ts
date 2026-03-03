@@ -1,7 +1,7 @@
 import type { ConversationMessage } from '../types';
 
 // ============================================
-// RUTH V2 — Response Quality Validator
+// RUTH V3 — Response Quality Validator
 // ============================================
 
 const MAX_WORDS = 55;

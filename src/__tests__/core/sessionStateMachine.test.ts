@@ -103,7 +103,7 @@ describe('SessionStateMachine', () => {
 
       expect(mockUpdate).toHaveBeenCalledWith({
         where: { id: 'session-1' },
-        data: { status: 'PAUSED' },
+        data: { status: 'PAUSED', idleRemindersSent: 0 },
       });
     });
 

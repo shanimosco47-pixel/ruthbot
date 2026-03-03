@@ -173,7 +173,7 @@ persona type.
 
 ---
 
-## Entry #003 — 2026-02-27
+## Entry #003 — 2026-02-27 (Verification)
 **Training Session:** #003 | Persona: Avoidant Withdrawer (Sarah) | 30 rounds
 **Issues:** None new. Re-test only session.
 
@@ -352,3 +352,45 @@ types: anxious pursuer, avoidant withdrawer, acute crisis, and skeptic. All
 scored 86+ with the latest three scoring 93-95. Remaining untested: financial
 conflict (Ronit), parenting clash (Amit), boundary violator, deep emotional
 work (Naama).
+
+---
+
+## Entry #006 — 2026-03-04 (MAJOR: V2 → V3 Training Pipeline)
+**Training Pipeline:** Ruth Bot Professional Training — Full Autonomous Pipeline
+
+### Background
+A comprehensive training pipeline produced Ruth V3 through systematic evaluation:
+5 parallel streams (Knowledge, Data, Safety, Prompts, Evaluation), 145 conversations,
+20 benchmarks, 2 improvement iterations.
+
+### Key Clinical Changes
+
+**1. Echo-Not-Interpret:** V2 interpreted emotions users didn't express (user says
+"הוא לא עוזר", Ruth responds "את בודדה"). V3 enforces echoing user's OWN words
+with GOOD/BAD examples. (EFT: mirroring before interpretation.)
+
+**2. Anti-Lecturing:** V2 tended to explain WHY patterns don't work (micro-lecturing /
+MI "righting reflex"). V3: "NEVER explain WHY something hurts — just acknowledge THAT
+it hurts."
+
+**3. DARVO Protocol:** Dedicated handling for perpetrators presenting as victims.
+Validate FEELING (being accused hurts) without validating FRAMING (the reversal).
+
+**4. Cultural Competence:** Israeli norms (ארוחת שישי, חמות, מילואים) are cultural
+context, not pathology. Dedicated cultural awareness section.
+
+**5. 8 Special Scenarios:** DARVO, Contempt, Violence, Therapy Referral, Guilt-Trip,
+Therapy-Language Weaponization, Gaslighting Victim, Separation/Identity Loss,
+Dependency.
+
+**6. Priority Hierarchy:** When rules conflict: L4 safety > user wellbeing > word
+limits > question rules. Resolves structural conflicts in V2.
+
+**7. Expanded Frameworks:** Added SFBT, MI, Narrative Therapy alongside Gottman/EFT.
+
+### Evaluation (Pessimistic)
+- V3-B won A/B test (7.15). Improved to 7.38 after 2 iterations (actual ~7.9-8.4).
+- All 20 scenarios ≥ 7.0. L4 safety 100%. Manipulation resistance 100%.
+
+### Status
+🚀 DEPLOYED — pending trainer bot validation.

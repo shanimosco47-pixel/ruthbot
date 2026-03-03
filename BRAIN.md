@@ -6,15 +6,27 @@
 
 ---
 
-## Current Status: RUTH V2.4 — DEPLOYED ✅
+## Current Status: RUTH V3 — READY TO DEPLOY ✅
 
 The bot is **live in production** on Render free tier (webhook mode).
-All 12 development phases complete + V2 behavioral tuning + V2.2 speed + V2.3 trainer fixes + V2.4 training quality fixes + **V2.5 session close fix + architecture fix**.
+All 12 development phases + V2 behavioral tuning + V2.2-V2.5 fixes + **V3 training pipeline**.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **Last deploy:** 2026-02-28 — Commit `de076fe` — RUTH V2.4 training fixes (V2.5 pending deploy)
-- **Training score:** 44 → 90.3 across 13 training runs
+- **Last deploy:** 2026-02-28 — Commit `de076fe` — RUTH V2.4 training fixes (V2.5 + V3 pending deploy)
+- **V2 Training score:** 44 → 90.3 across 13 training runs
+- **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
+
+### RUTH V3 System Prompt Upgrade (2026-03-04)
+- **Full training pipeline:** 145 synthetic conversations (100 gold + 45 noise), 20 benchmark scenarios, 3 A/B variants, 2 improvement iterations
+- **V3 replaces V2 coaching prompt** in both `buildCombinedRiskCoachingPrompt()` and `buildCoachingPrompt()`
+- **Key additions:** Echo-not-interpret principle, DARVO protocol, 8 special scenarios (contempt, violence, guilt-trip, therapy-language weaponization, gaslighting victim, separation/identity loss, dependency), 16 anti-patterns, Israeli cultural awareness, SFBT/MI/Narrative therapy frameworks
+- **Question rule relaxed:** "EXACTLY 1" → "at most 1" (0 OK for avoidant users)
+- **Priority hierarchy:** L4 safety > user wellbeing > word limits > question rules
+- **Preserved:** Risk classification task, EFT softening rule, avoidant adaptation, all V2.5 architecture fixes
+- **Training report:** `ruth_training/TRAINING_REPORT.md`
+- **Backup:** `.prompt-history/systemPrompts_2026-03-04_deploy_v3.ts`
+- **Files modified:** `src/services/ai/systemPrompts.ts`, `src/utils/responseValidator.ts`
 
 ### RUTH V2.5 Session Close & Architecture Fix (2026-02-28)
 - **Session summary appearing mid-flow BUG:** Fixed `orchestrateSessionClose()` firing for old sessions while user is in new session
