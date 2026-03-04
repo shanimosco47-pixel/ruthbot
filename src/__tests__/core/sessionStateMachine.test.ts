@@ -1,14 +1,17 @@
+import { SessionStatus } from '@prisma/client';
 import { VALID_TRANSITIONS } from '../../config/constants';
 
 // Mock Prisma
 const mockFindUnique = jest.fn();
 const mockUpdate = jest.fn();
+const mockUpdateMany = jest.fn();
 
 jest.mock('../../db/client', () => ({
   prisma: {
     coupleSession: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
+      updateMany: (...args: unknown[]) => mockUpdateMany(...args),
       findMany: jest.fn().mockResolvedValue([]),
     },
   },
@@ -59,7 +62,7 @@ describe('SessionStateMachine', () => {
     });
 
     it('should reject unknown states', () => {
-      expect(SessionStateMachine.isValidTransition('NONEXISTENT', 'ACTIVE')).toBe(false);
+      expect(SessionStateMachine.isValidTransition('NONEXISTENT' as SessionStatus, 'ACTIVE')).toBe(false);
     });
 
     it('should validate LOCKED is terminal (no valid outgoing transitions)', () => {
@@ -97,12 +100,12 @@ describe('SessionStateMachine', () => {
         status: 'ACTIVE',
         anonymizedCoupleId: 'anon-123',
       });
-      mockUpdate.mockResolvedValue({});
+      mockUpdateMany.mockResolvedValue({ count: 1 });
 
       await SessionStateMachine.transition('session-1', 'PAUSED' as any, { reason: 'test' });
 
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: 'session-1' },
+      expect(mockUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'session-1', status: 'ACTIVE' },
         data: { status: 'PAUSED', idleRemindersSent: 0 },
       });
     });
@@ -112,12 +115,13 @@ describe('SessionStateMachine', () => {
         status: 'ACTIVE',
         anonymizedCoupleId: 'anon-123',
       });
-      mockUpdate.mockResolvedValue({});
+      mockUpdateMany.mockResolvedValue({ count: 1 });
 
       await SessionStateMachine.transition('session-1', 'CLOSED' as any);
 
-      expect(mockUpdate).toHaveBeenCalledWith(
+      expect(mockUpdateMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: expect.objectContaining({ id: 'session-1', status: 'ACTIVE' }),
           data: expect.objectContaining({
             status: 'CLOSED',
             closedAt: expect.any(Date),
@@ -131,11 +135,11 @@ describe('SessionStateMachine', () => {
         status: 'ACTIVE',
         anonymizedCoupleId: 'anon-123',
       });
-      mockUpdate.mockResolvedValue({});
+      mockUpdateMany.mockResolvedValue({ count: 1 });
 
       await SessionStateMachine.transition('session-1', 'PAUSED' as any);
 
-      const updateCall = mockUpdate.mock.calls[0][0];
+      const updateCall = mockUpdateMany.mock.calls[0][0];
       expect(updateCall.data.closedAt).toBeUndefined();
     });
 
@@ -187,13 +191,13 @@ describe('SessionStateMachine', () => {
     for (const [source, targets] of Object.entries(VALID_TRANSITIONS)) {
       for (const target of targets) {
         it(`should allow ${source} → ${target}`, () => {
-          expect(SessionStateMachine.isValidTransition(source, target)).toBe(true);
+          expect(SessionStateMachine.isValidTransition(source as SessionStatus, target as SessionStatus)).toBe(true);
         });
       }
     }
 
     // Test critical invalid transitions
-    const invalidTransitions = [
+    const invalidTransitions: [SessionStatus, SessionStatus][] = [
       ['LOCKED', 'ACTIVE'],
       ['LOCKED', 'CLOSED'],
       ['LOCKED', 'PAUSED'],

@@ -34,6 +34,16 @@ export function getCachedSummary(sessionId: string, userRole: 'USER_A' | 'USER_B
   return null;
 }
 
+// Periodic cache eviction to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of summaryCache) {
+    if (now - entry.timestamp > SUMMARY_CACHE_TTL_MS) {
+      summaryCache.delete(key);
+    }
+  }
+}, SUMMARY_CACHE_TTL_MS);
+
 function cacheSummary(sessionId: string, userRole: 'USER_A' | 'USER_B', data: SummaryResult): void {
   summaryCache.set(`${sessionId}:${userRole}`, { data, timestamp: Date.now() });
 }
@@ -67,6 +77,7 @@ export async function orchestrateSessionClose(
     return;
   }
 
+  try {
   const session = await prisma.coupleSession.findUnique({
     where: { id: sessionId },
     include: {
@@ -90,15 +101,20 @@ export async function orchestrateSessionClose(
       try {
         content = decrypt(m.rawContent!);
       } catch {
-        // Fallback for messages stored before encryption was added
-        content = m.rawContent!;
+        // Skip messages that fail decryption — returning encrypted hex is a data leak
+        logger.warn('Failed to decrypt message during close orchestration, skipping', {
+          sessionId,
+          messageType: m.messageType,
+        });
+        return null;
       }
       return {
         role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
         content,
         timestamp: m.createdAt,
       };
-    });
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null);
 
   // Determine topic category
   const topicCategory = (session.riskEvents[0]?.topicCategory || 'משהו שחשוב לי לשתף') as TopicCategory;
@@ -190,6 +206,14 @@ export async function orchestrateSessionClose(
   });
 
   logger.info('Session close orchestration completed', { sessionId });
+  } catch (error) {
+    // Top-level catch: if orchestration fails after claiming the flag,
+    // log the error but don't rethrow — the session is already CLOSED.
+    logger.error('Session close orchestration failed after claim', {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function generateSummary(
@@ -212,13 +236,20 @@ async function generateSummary(
     });
 
     return result;
-  } catch {
+  } catch (error) {
+    logger.error('Failed to generate session summary via Claude', {
+      sessionId,
+      userRole,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       personalSummary: 'הסשן הסתיים. תודה שהשתתפת.',
       sharedCommitments: 'לא זוהו מחויבויות ספציפיות בסשן זה.',
       encouragement: 'כל שיחה היא צעד קדימה. אתם בדרך הנכונה. ❤️',
-      emotionScoreStart: 3,
-      emotionScoreEnd: 3,
+      // Use null-like sentinel (0) instead of fabricated mid-range scores.
+      // Downstream telemetry should treat 0 as "unknown/unavailable".
+      emotionScoreStart: 0,
+      emotionScoreEnd: 0,
     };
   }
 }

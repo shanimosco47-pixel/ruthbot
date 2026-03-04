@@ -38,55 +38,51 @@ export async function handleDeleteConfirmation(ctx: Context, telegramId: string)
       return;
     }
 
-    // Delete messages associated with this user's sessions
-    const sessionsAsA = await prisma.coupleSession.findMany({
-      where: { userAId: targetUserId },
-      select: { id: true },
-    });
-
-    const sessionsAsB = await prisma.coupleSession.findMany({
-      where: { userBId: targetUserId },
-      select: { id: true },
-    });
-
-    const allSessionIds = [
-      ...sessionsAsA.map((s) => s.id),
-      ...sessionsAsB.map((s) => s.id),
-    ];
-
-    // Delete messages
-    if (allSessionIds.length > 0) {
-      await prisma.message.deleteMany({
-        where: { sessionId: { in: allSessionIds } },
+    // Wrap all deletions in a transaction to prevent partial deletion on failure
+    await prisma.$transaction(async (tx) => {
+      const sessionsAsA = await tx.coupleSession.findMany({
+        where: { userAId: targetUserId },
+        select: { id: true },
       });
 
-      // Delete risk events
-      await prisma.riskEvent.deleteMany({
-        where: { sessionId: { in: allSessionIds } },
+      const sessionsAsB = await tx.coupleSession.findMany({
+        where: { userBId: targetUserId },
+        select: { id: true },
       });
-    }
 
-    // Remove user from sessions (nullify references)
-    await prisma.coupleSession.updateMany({
-      where: { userBId: targetUserId },
-      data: { userBId: null },
-    });
+      const allSessionIds = [
+        ...sessionsAsA.map((s) => s.id),
+        ...sessionsAsB.map((s) => s.id),
+      ];
 
-    // For sessions where user is A, close them
-    await prisma.coupleSession.updateMany({
-      where: { userAId: targetUserId },
-      data: { status: 'CLOSED', closedAt: new Date() },
-    });
+      if (allSessionIds.length > 0) {
+        await tx.message.deleteMany({
+          where: { sessionId: { in: allSessionIds } },
+        });
 
-    // Delete the PII user record
-    // First remove the foreign key constraints
-    await prisma.coupleSession.updateMany({
-      where: { billingOwnerId: targetUserId },
-      data: { billingOwnerId: null },
-    });
+        await tx.riskEvent.deleteMany({
+          where: { sessionId: { in: allSessionIds } },
+        });
+      }
 
-    await prisma.user.delete({
-      where: { id: targetUserId },
+      await tx.coupleSession.updateMany({
+        where: { userBId: targetUserId },
+        data: { userBId: null },
+      });
+
+      await tx.coupleSession.updateMany({
+        where: { userAId: targetUserId },
+        data: { status: 'CLOSED', closedAt: new Date() },
+      });
+
+      await tx.coupleSession.updateMany({
+        where: { billingOwnerId: targetUserId },
+        data: { billingOwnerId: null },
+      });
+
+      await tx.user.delete({
+        where: { id: targetUserId },
+      });
     });
 
     // Note: SessionTelemetry and SessionEmbedding are kept (anonymized, no PII)

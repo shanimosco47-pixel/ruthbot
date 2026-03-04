@@ -86,12 +86,14 @@ export async function classifyRisk(params: {
       error: error instanceof Error ? error.message : String(error),
     });
 
-    // On total failure: conservative classification, don't crash the pipeline
+    // SAFETY: On total failure, assume worst case — NOT permissive L2.
+    // L3_PLUS prevents reframing and includes professional referral resources.
+    // L4 would lock the session, which is too aggressive for an API timeout.
     return {
-      risk_level: 'L2',
+      risk_level: 'L3_PLUS',
       topic_category: FALLBACK_TOPIC_CATEGORY,
-      action_required: 'Manual review — Risk Engine call failed',
-      reasoning: 'Automatic fallback due to API failure',
+      action_required: 'URGENT: Risk Engine failed — manual review required',
+      reasoning: 'Automatic RESTRICTIVE fallback due to API failure — classified as L3_PLUS for safety',
     };
   }
 }
@@ -200,14 +202,15 @@ export async function classifyRiskAndCoach(params: {
       error: error instanceof Error ? error.message : String(error),
     });
 
+    // SAFETY: On total failure, assume worst case — NOT permissive L2.
     return {
       risk: {
-        risk_level: 'L2',
+        risk_level: 'L3_PLUS',
         topic_category: FALLBACK_TOPIC_CATEGORY,
-        action_required: 'Manual review — combined call failed',
-        reasoning: 'Automatic fallback due to API failure',
+        action_required: 'URGENT: Combined risk+coaching failed — manual review required',
+        reasoning: 'Automatic RESTRICTIVE fallback due to API failure — classified as L3_PLUS for safety',
       },
-      coaching: 'אירעה שגיאה זמנית. ספר/י לי מה קורה — אני כאן.',
+      coaching: 'אירעה שגיאה זמנית. ספר/י לי מה קורה — אני כאן.\n\nאם את/ה במצוקה, אפשר לפנות לער"ן (עזרה ראשונה נפשית): 1201',
     };
   }
 }

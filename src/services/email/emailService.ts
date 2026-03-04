@@ -54,6 +54,16 @@ export async function sendSessionSummaryEmail(params: SessionSummaryEmail): Prom
   }
 }
 
+/** Escape HTML special characters to prevent XSS in email templates */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function buildEmailHtml(params: {
   userName: string;
   sessionDate: string;
@@ -65,7 +75,16 @@ function buildEmailHtml(params: {
   ctaUrl: string;
   unsubscribeUrl: string;
 }): string {
-  const { userName, sessionDate, personalSummary, sharedCommitments, encouragement, resourceTitle, resourceUrl, ctaUrl, unsubscribeUrl } = params;
+  // Escape all user-controlled content to prevent XSS
+  const userName = escapeHtml(params.userName);
+  const sessionDate = escapeHtml(params.sessionDate);
+  const personalSummary = escapeHtml(params.personalSummary);
+  const sharedCommitments = escapeHtml(params.sharedCommitments);
+  const encouragement = escapeHtml(params.encouragement);
+  const resourceTitle = escapeHtml(params.resourceTitle);
+  const resourceUrl = encodeURI(params.resourceUrl);
+  const ctaUrl = encodeURI(params.ctaUrl);
+  const unsubscribeUrl = encodeURI(params.unsubscribeUrl);
 
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">

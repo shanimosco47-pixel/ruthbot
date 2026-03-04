@@ -21,28 +21,47 @@ async function main(): Promise<void> {
   // Set bot instance for billing notifications
   setBillingBotInstance(bot);
 
+  const MAX_BODY_SIZE = 1024 * 1024; // 1MB limit for webhook bodies
+
+  // Helper to read body with size limit
+  function readBody(req: http.IncomingMessage, res: http.ServerResponse): Promise<string | null> {
+    return new Promise((resolve) => {
+      let body = '';
+      let bodySize = 0;
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY_SIZE) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Payload too large' }));
+          req.destroy();
+          resolve(null);
+          return;
+        }
+        body += chunk.toString();
+      });
+      req.on('end', () => resolve(body));
+      req.on('error', () => resolve(null));
+    });
+  }
+
   // Create HTTP server for Stripe webhooks
   const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/stripe/webhook') {
-      let body = '';
-      req.on('data', (chunk) => {
-        body += chunk.toString();
-      });
-      req.on('end', async () => {
-        try {
-          const signature = req.headers['stripe-signature'] as string;
-          await handleStripeWebhook(body, signature);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ received: true }));
-        } catch (error) {
-          logger.error('Stripe webhook error', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          // Always return 200 to Stripe to prevent redelivery loops
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ received: true }));
-        }
-      });
+      const body = await readBody(req, res);
+      if (body === null) return;
+      try {
+        const signature = req.headers['stripe-signature'] as string;
+        await handleStripeWebhook(body, signature);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ received: true }));
+      } catch (error) {
+        logger.error('Stripe webhook error', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Always return 200 to Stripe to prevent redelivery loops
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ received: true }));
+      }
     } else if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', version: 'v3.0', timestamp: new Date().toISOString() }));
@@ -52,8 +71,8 @@ async function main(): Promise<void> {
     }
   });
 
-  // Start periodic tasks
-  startPeriodicTasks(bot);
+  // Start periodic tasks (returns timer refs for cleanup)
+  const periodicTimers = startPeriodicTasks(bot);
 
   // Launch bot
   if (env.NODE_ENV === 'production' && env.WEBHOOK_URL) {
@@ -77,24 +96,20 @@ async function main(): Promise<void> {
           return;
         }
 
-        let body = '';
-        req.on('data', (chunk) => {
-          body += chunk.toString();
-        });
-        req.on('end', async () => {
-          try {
-            const update = JSON.parse(body);
-            await bot.handleUpdate(update);
-            res.writeHead(200);
-            res.end();
-          } catch (error) {
-            logger.error('Telegram webhook processing error', {
-              error: error instanceof Error ? error.message : String(error),
-            });
-            res.writeHead(200);
-            res.end();
-          }
-        });
+        const body = await readBody(req, res);
+        if (body === null) return;
+        try {
+          const update = JSON.parse(body);
+          await bot.handleUpdate(update);
+          res.writeHead(200);
+          res.end();
+        } catch (error) {
+          logger.error('Telegram webhook processing error', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          res.writeHead(200);
+          res.end();
+        }
       } else {
         originalHandler(req, res);
       }
@@ -116,6 +131,10 @@ async function main(): Promise<void> {
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`${signal} received. Shutting down...`);
+    // Clear all periodic timers
+    for (const timer of periodicTimers) {
+      clearInterval(timer);
+    }
     bot.stop(signal);
     server.close();
     await prisma.$disconnect();
@@ -129,9 +148,11 @@ async function main(): Promise<void> {
 /**
  * Periodic background tasks.
  */
-function startPeriodicTasks(bot: Telegraf): void {
+function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
+  const timers: NodeJS.Timeout[] = [];
+
   // Auto-close expired PAUSED sessions (every 5 minutes)
-  setInterval(async () => {
+  timers.push(setInterval(async () => {
     try {
       // closeExpiredSessions returns the exact IDs it closed — no stale query needed.
       const closedIds = await SessionStateMachine.closeExpiredSessions(env.SESSION_EXPIRY_HOURS);
@@ -154,10 +175,10 @@ function startPeriodicTasks(bot: Telegraf): void {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000));
 
   // Check for expired invite tokens (every minute)
-  setInterval(async () => {
+  timers.push(setInterval(async () => {
     try {
       const expired = await prisma.coupleSession.findMany({
         where: {
@@ -169,12 +190,17 @@ function startPeriodicTasks(bot: Telegraf): void {
       });
 
       for (const session of expired) {
+        // Mark token as used AND transition session back to INVITE_CRAFTING
+        // so user isn't stuck in INVITE_PENDING forever
         await prisma.coupleSession.update({
           where: { id: session.id },
-          data: { inviteTokenUsed: true },
+          data: {
+            inviteTokenUsed: true,
+            status: 'INVITE_CRAFTING',
+          },
         });
 
-        logger.info('Invite token expired', { sessionId: session.id });
+        logger.info('Invite token expired — session returned to INVITE_CRAFTING', { sessionId: session.id });
 
         try {
           const userA = await prisma.user.findUnique({
@@ -200,10 +226,10 @@ function startPeriodicTasks(bot: Telegraf): void {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 60 * 1000);
+  }, 60 * 1000));
 
   // Auto-pause idle ACTIVE sessions (every 5 minutes)
-  setInterval(async () => {
+  timers.push(setInterval(async () => {
     try {
       const idleThreshold = new Date(Date.now() - env.IDLE_TIMEOUT_MINUTES * 60 * 1000);
       const idleSessions = await prisma.coupleSession.findMany({
@@ -233,12 +259,13 @@ function startPeriodicTasks(bot: Telegraf): void {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000));
 
-  // Auto-decline PENDING_PARTNER_CONSENT sessions after 15 min (every 2 minutes)
-  setInterval(async () => {
+  // Auto-decline PENDING_PARTNER_CONSENT sessions (every 2 minutes)
+  const CONSENT_TIMEOUT_MINUTES = 15;
+  timers.push(setInterval(async () => {
     try {
-      const consentTimeout = new Date(Date.now() - 15 * 60 * 1000);
+      const consentTimeout = new Date(Date.now() - CONSENT_TIMEOUT_MINUTES * 60 * 1000);
       const pendingConsent = await prisma.coupleSession.findMany({
         where: {
           status: 'PENDING_PARTNER_CONSENT',
@@ -287,10 +314,10 @@ function startPeriodicTasks(bot: Telegraf): void {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 2 * 60 * 1000);
+  }, 2 * 60 * 1000));
 
   // Send reminders to PAUSED sessions before auto-close (every 5 minutes)
-  setInterval(async () => {
+  timers.push(setInterval(async () => {
     try {
       // Sessions paused for more than half the expiry time get a reminder (only if not already reminded enough)
       const reminderThreshold = new Date(Date.now() - (env.SESSION_EXPIRY_HOURS * 60 * 60 * 1000) / 2);
@@ -322,7 +349,9 @@ function startPeriodicTasks(bot: Telegraf): void {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000));
+
+  return timers;
 }
 
 /**

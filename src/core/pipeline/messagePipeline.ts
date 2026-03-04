@@ -224,7 +224,7 @@ async function handleL4HardStop(
     reasoning: riskAssessment.reasoning,
   });
 
-  // Lock session immediately
+  // Lock session immediately — SAFETY CRITICAL: must not fail silently
   try {
     await SessionStateMachine.transition(context.sessionId, 'LOCKED', {
       reason: 'L4_hard_stop',
@@ -233,10 +233,27 @@ async function handleL4HardStop(
     // Clean up all in-memory state for this session
     cleanupSessionState(context.sessionId);
   } catch (error) {
-    logger.error('Failed to lock session on L4', {
+    logger.error('Failed to lock session on L4 via state machine, attempting emergency direct DB update', {
       sessionId: context.sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
+
+    // Emergency fallback: direct DB update bypassing state machine validation
+    try {
+      await prisma.coupleSession.update({
+        where: { id: context.sessionId },
+        data: { status: 'LOCKED' },
+      });
+      cleanupSessionState(context.sessionId);
+      logger.warn('L4 emergency lock succeeded via direct DB update', {
+        sessionId: context.sessionId,
+      });
+    } catch (emergencyError) {
+      logger.error('L4 EMERGENCY LOCK FAILED — session may remain unlocked', {
+        sessionId: context.sessionId,
+        error: emergencyError instanceof Error ? emergencyError.message : String(emergencyError),
+      });
+    }
   }
 
   const emergencyText = getEmergencyResources(context.language);
@@ -259,10 +276,11 @@ type SessionContext = PipelineInput['context'];
  * Get conversation history for the current session.
  */
 async function getConversationHistory(sessionId: string): Promise<ConversationMessage[]> {
-  const messages = await prisma.message.findMany({
+  // Fetch the NEWEST 50 messages: query desc then reverse to chronological order
+  const messagesDesc = await prisma.message.findMany({
     where: { sessionId },
-    orderBy: { createdAt: 'asc' },
-    take: 50, // Limit context window
+    orderBy: { createdAt: 'desc' },
+    take: 50,
     select: {
       senderRole: true,
       rawContent: true,
@@ -270,6 +288,7 @@ async function getConversationHistory(sessionId: string): Promise<ConversationMe
       createdAt: true,
     },
   });
+  const messages = messagesDesc.reverse();
 
   return messages
     .filter((m) => m.rawContent)
@@ -278,15 +297,21 @@ async function getConversationHistory(sessionId: string): Promise<ConversationMe
       try {
         content = decrypt(m.rawContent!);
       } catch {
-        // Fallback for messages stored before encryption was added
-        content = m.rawContent!;
+        // Skip messages that fail decryption — returning encrypted hex as "content" is a data leak
+        logger.warn('Failed to decrypt message, skipping from history', {
+          sessionId,
+          messageType: m.messageType,
+          createdAt: m.createdAt,
+        });
+        return null;
       }
       return {
         role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
         content,
         timestamp: m.createdAt,
       };
-    });
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null);
 }
 
 /**

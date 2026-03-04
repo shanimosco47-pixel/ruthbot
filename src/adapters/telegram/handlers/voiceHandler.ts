@@ -35,6 +35,7 @@ export async function handleVoice(ctx: Context): Promise<void> {
     return;
   }
 
+  await ctx.sendChatAction('typing');
   await ctx.reply('🎙️ מתמלל את ההודעה הקולית...');
 
   let filePath: string | null = null;
@@ -70,12 +71,15 @@ export async function handleVoice(ctx: Context): Promise<void> {
     // Process transcribed text through the pipeline
     const language = detectLanguage(transcript);
 
+    // Fetch full session to get correct userAId/userBId
+    const fullSession = await SessionManager.getSession(session.id);
+
     const result = await processMessage({
       context: {
         sessionId: session.id,
         anonymizedCoupleId: session.anonymizedCoupleId,
-        userAId: session.role === 'USER_A' ? userId : '',
-        userBId: session.role === 'USER_B' ? userId : null,
+        userAId: fullSession?.userAId || (session.role === 'USER_A' ? userId : ''),
+        userBId: fullSession?.userBId || null,
         currentUserId: userId,
         currentRole: session.role,
         status: session.status,

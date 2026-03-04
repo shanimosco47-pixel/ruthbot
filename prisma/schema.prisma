@@ -73,6 +73,8 @@ model CoupleSession {
   messages                Message[]
   riskEvents              RiskEvent[]
 
+  @@index([status, updatedAt])
+  @@index([status, inviteTokenExpiresAt, inviteTokenUsed])
   @@map("couple_sessions")
 }
 
@@ -91,6 +93,7 @@ model Message {
 
   session         CoupleSession @relation(fields: [sessionId], references: [id])
 
+  @@index([sessionId, createdAt])
   @@map("messages")
 }
 
@@ -106,6 +109,7 @@ model RiskEvent {
 
   session         CoupleSession @relation(fields: [sessionId], references: [id])
 
+  @@index([sessionId, createdAt])
   @@map("risk_events")
 }
 

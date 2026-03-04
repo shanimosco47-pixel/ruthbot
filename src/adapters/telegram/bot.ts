@@ -14,13 +14,20 @@ import { orchestrateSessionClose } from '../../core/orchestrator/sessionCloseOrc
 export function createBot(): Telegraf {
   const bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
 
-  // Error handler
-  bot.catch((err, ctx) => {
+  // Error handler — log and give user feedback
+  bot.catch(async (err, ctx) => {
     logger.error('Bot error', {
       error: err instanceof Error ? err.message : String(err),
       updateType: ctx.updateType,
       chatId: ctx.chat?.id,
     });
+
+    try {
+      await ctx.reply('אירעה שגיאה. נסה/י שוב בעוד רגע.');
+    } catch {
+      // If we can't even reply, just log
+      logger.error('Failed to send error feedback to user', { chatId: ctx.chat?.id });
+    }
   });
 
   // /start command — handles both fresh starts and deep links

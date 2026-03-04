@@ -223,7 +223,7 @@ describe('Risk Engine', () => {
   // API failure handling
   // ============================================
   describe('API failure handling', () => {
-    it('should fallback to L2 on Claude API failure', async () => {
+    it('should fallback to L3_PLUS on Claude API failure (safety-first)', async () => {
       mockCallClaudeJSON.mockRejectedValue(new Error('API timeout'));
 
       const result = await classifyRisk({
@@ -232,7 +232,7 @@ describe('Risk Engine', () => {
         senderRole: 'USER_A',
       });
 
-      expect(result.risk_level).toBe('L2');
+      expect(result.risk_level).toBe('L3_PLUS');
       expect(result.topic_category).toBe(FALLBACK_TOPIC_CATEGORY);
       expect(result.reasoning).toContain('API failure');
     });

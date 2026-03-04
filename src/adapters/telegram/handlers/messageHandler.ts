@@ -88,7 +88,25 @@ export async function handleMessage(ctx: Context): Promise<void> {
     language,
   };
 
-  if (activeSession.status === 'ACTIVE') {
+  if (activeSession.status === 'PAUSED') {
+    // Auto-resume PAUSED session when user sends a message
+    try {
+      await SessionStateMachine.transition(activeSession.id, 'ACTIVE', { reason: 'user_message_resume' });
+      sessionContext.status = 'ACTIVE';
+      logger.info('Session auto-resumed from PAUSED on user message', {
+        sessionId: activeSession.id,
+        userId,
+      });
+    } catch (resumeError) {
+      logger.error('Failed to auto-resume PAUSED session', {
+        sessionId: activeSession.id,
+        error: resumeError instanceof Error ? resumeError.message : String(resumeError),
+      });
+      await ctx.reply('אירעה שגיאה בחידוש הסשן. נסה/י שוב.');
+      return;
+    }
+    await handleActiveSessionMessage(ctx, telegramId, text, sessionContext);
+  } else if (activeSession.status === 'ACTIVE') {
     await handleActiveSessionMessage(ctx, telegramId, text, sessionContext);
   } else if (
     activeSession.status === 'ASYNC_COACHING' ||
@@ -250,7 +268,12 @@ async function handleReflectionStep1(
   text: string,
   state: { state: string; sessionId?: string; data?: Record<string, unknown> }
 ): Promise<void> {
-  if (!state.sessionId) return;
+  if (!state.sessionId) {
+    logger.warn('Reflection gate step1 called without sessionId', { telegramId });
+    await ctx.reply('אירעה שגיאה. נסה/י שוב עם /start');
+    userStates.delete(telegramId);
+    return;
+  }
 
   // Risk Engine runs on ALL free text in Reflection Gate
   const { classifyRisk } = await import('../../../services/risk/riskEngine');
@@ -284,7 +307,12 @@ async function handleReflectionMirror(
   mirrorText: string,
   state: { state: string; sessionId?: string; data?: Record<string, unknown> }
 ): Promise<void> {
-  if (!state.sessionId) return;
+  if (!state.sessionId) {
+    logger.warn('Reflection gate mirror called without sessionId', { telegramId });
+    await ctx.reply('אירעה שגיאה. נסה/י שוב עם /start');
+    userStates.delete(telegramId);
+    return;
+  }
 
   // Risk Engine on mirror response
   const { classifyRisk } = await import('../../../services/risk/riskEngine');
@@ -336,6 +364,18 @@ async function handleReflectionMirror(
       sessionId: state.sessionId,
       data: state.data,
     });
+  } else {
+    // Unrecognized mirror_quality — treat as PARTIAL to avoid silent drop
+    logger.warn('Unrecognized mirror_quality from AI, treating as PARTIAL', {
+      sessionId: state.sessionId,
+      mirrorQuality: evaluation.mirror_quality,
+    });
+    await ctx.reply('נסה/י לשקף שוב — מה לדעתך חשוב לבן/בת הזוג שלך?');
+    userStates.set(telegramId, {
+      state: 'reflection_gate_mirror',
+      sessionId: state.sessionId,
+      data: state.data,
+    });
   }
 }
 
@@ -349,7 +389,7 @@ async function handleActiveSessionMessage(
   text: string,
   sessionContext: SessionContext
 ): Promise<void> {
-  await ctx.reply('מקליד... ✍️');
+  await ctx.sendChatAction('typing');
 
   try {
     const result = await processMessage({
@@ -437,7 +477,7 @@ async function handleCoachingMessage(
   text: string,
   sessionId: string
 ): Promise<void> {
-  await ctx.reply('מקליד... ✍️');
+  await ctx.sendChatAction('typing');
 
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
   const session = await SessionManager.getActiveSession(userId);
@@ -449,13 +489,16 @@ async function handleCoachingMessage(
 
   const language = detectLanguage(text);
 
+  // Fetch full session for correct userAId/userBId
+  const fullSession = await SessionManager.getSession(sessionId);
+
   try {
     const result = await processMessage({
       context: {
         sessionId,
         anonymizedCoupleId: session.anonymizedCoupleId,
-        userAId: userId,
-        userBId: null,
+        userAId: fullSession?.userAId || userId,
+        userBId: fullSession?.userBId || null,
         currentUserId: userId,
         currentRole: session.role,
         status: session.status,
@@ -619,14 +662,19 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
         try {
           content = decrypt(m.rawContent!);
         } catch {
-          content = m.rawContent!;
+          logger.warn('Failed to decrypt message for email summary, skipping', {
+            sessionId: session.id,
+            messageType: m.messageType,
+          });
+          return null;
         }
         return {
           role: m.messageType === 'COACHING' ? ('BOT' as const) : m.senderRole,
           content,
           timestamp: m.createdAt,
         };
-      });
+      })
+      .filter((m): m is NonNullable<typeof m> => m !== null);
 
     try {
       summary = await callClaudeJSON<{ personalSummary: string; sharedCommitments: string; encouragement: string }>({

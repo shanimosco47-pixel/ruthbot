@@ -45,10 +45,18 @@ export class SessionStateMachine {
       updateData.idleRemindersSent = 0;
     }
 
-    await prisma.coupleSession.update({
-      where: { id: sessionId },
+    // Atomic compare-and-swap: only update if status hasn't changed since we read it.
+    // This prevents race conditions where two concurrent calls both read the same status.
+    const result = await prisma.coupleSession.updateMany({
+      where: { id: sessionId, status: currentStatus },
       data: updateData,
     });
+
+    if (result.count === 0) {
+      const errorMsg = `State transition conflict: session ${sessionId} status changed concurrently (expected ${currentStatus})`;
+      logger.error(errorMsg, { sessionId, currentStatus, newStatus, metadata });
+      throw new Error(errorMsg);
+    }
 
     logger.info('Session state transition', {
       sessionId,
@@ -78,7 +86,7 @@ export class SessionStateMachine {
   /**
    * Check if a transition is valid without performing it.
    */
-  static isValidTransition(currentStatus: string, newStatus: string): boolean {
+  static isValidTransition(currentStatus: SessionStatus, newStatus: SessionStatus): boolean {
     const allowed = VALID_TRANSITIONS[currentStatus];
     return !!allowed && allowed.includes(newStatus);
   }

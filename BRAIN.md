@@ -1,19 +1,21 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-02-28 (V2.5 session close fix)
+> Last updated: 2026-03-04 (V3 code deployed to GitHub, pending Render deploy)
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V3 — READY TO DEPLOY ✅
+## Current Status: RUTH V3 — CODE ON GITHUB, RENDER DEPLOY NEEDED 🔶
 
-The bot is **live in production** on Render free tier (webhook mode).
-All 12 development phases + V2 behavioral tuning + V2.2-V2.5 fixes + **V3 training pipeline**.
+The bot is **live in production** on Render free tier (webhook mode) — currently running **V2.3**.
+V3 code is pushed to GitHub (`7aff470`) but Render auto-deploy is OFF — manual deploy required.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **Last deploy:** 2026-02-28 — Commit `de076fe` — RUTH V2.4 training fixes (V2.5 + V3 pending deploy)
+- **GitHub commit:** `7aff470` (V3 prompt + v3.0 health version)
+- **Last Render deploy:** 2026-02-28 — Commit `de076fe` — still running V2.3
+- **⚡ TO DEPLOY V3:** Go to https://dashboard.render.com/web/srv-d6cv7nvfte5s73d2btp0 → "Manual Deploy" → "Deploy latest commit"
 - **V2 Training score:** 44 → 90.3 across 13 training runs
 - **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
 

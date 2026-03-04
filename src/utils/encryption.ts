@@ -29,11 +29,19 @@ export function decrypt(encryptedText: string): string {
 }
 
 /**
+ * Derive a separate HMAC key from the AES key to avoid key reuse.
+ * Using the same key for both AES-CBC and HMAC weakens both operations.
+ */
+function getHmacKey(): Buffer {
+  return crypto.createHash('sha256').update(Buffer.concat([getKey(), Buffer.from('hmac-key-derivation')])).digest();
+}
+
+/**
  * Generate a deterministic HMAC-SHA256 hash for lookup.
  * Used to find encrypted records without decrypting every row.
  */
 export function hmacHash(text: string): string {
-  return crypto.createHmac('sha256', getKey()).update(text).digest('hex');
+  return crypto.createHmac('sha256', getHmacKey()).update(text).digest('hex');
 }
 
 export function generateInviteToken(): string {
