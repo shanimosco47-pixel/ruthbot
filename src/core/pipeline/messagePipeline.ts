@@ -156,12 +156,19 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   }
 
   // ================================================
-  // Step 4: Reframe Generation (only in ACTIVE state with partner, L1/L2 only)
+  // Step 4: Reframe Generation
+  // Generate reframe in two cases:
+  // A) ACTIVE session with partner present (standard couple flow)
+  // B) shouldDraft is true (solo coaching — draft for later delivery)
+  // Only for L1/L2 risk levels.
   // ================================================
   let reframedMessage: string | null = null;
   let requiresApproval = false;
 
-  if (context.status === 'ACTIVE' && context.userBId) {
+  const shouldGenerateReframe =
+    (context.status === 'ACTIVE' && context.userBId) || shouldDraft;
+
+  if (shouldGenerateReframe) {
     if (riskAssessment.risk_level === 'L1' || riskAssessment.risk_level === 'L2') {
       const conversationContext = conversationHistory
         .slice(-6)

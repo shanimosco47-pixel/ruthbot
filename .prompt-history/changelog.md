@@ -123,3 +123,42 @@ Complete replacement of V2 coaching prompt with V3, produced by systematic train
 ### Files Modified
 - `src/services/ai/systemPrompts.ts` — V3 prompt in both `buildCombinedRiskCoachingPrompt()` and `buildCoachingPrompt()`
 - `src/utils/responseValidator.ts` — Version comment V2 → V3
+
+---
+
+## Change #004 — 2026-03-04 (Delivery Bug Fix + Clinical UX Improvements)
+**Issue:** Messages not delivered to partner; Ruth hallucinated "sent"; shallow emotional exploration
+**Backup:** `systemPrompts_2026-03-04_fix_delivery_ux.ts`
+
+### Root Cause Analysis
+Real Telegram conversation revealed multiple bugs:
+1. Draft flow (`draft:approve`) did nothing — no delivery mechanism
+2. Ruth's coaching text claimed "ההודעה נשלחה" but nothing was sent
+3. `deliverToPartner()` marked `delivered: true` before actual send
+4. If partner not yet in session, silent failure with false "sent" to user
+5. Insufficient emotional exploration before drafting (same question 3x)
+6. No User B intake — jumped straight to message drafting
+
+### Prompt Changes
+
+**Added to ANTI-PATTERNS (both `buildCombinedRiskCoachingPrompt` and `buildCoachingPrompt`):**
+- ❌ NEVER say "ההודעה נשלחה" — system handles delivery
+- ❌ NEVER include draft text in coaching response
+- ❌ NEVER repeat same draft
+- ❌ Ask same factual question repeatedly
+
+**New sections added:**
+- MESSAGE DELIVERY RULES — Ruth must never claim delivery
+- USER_B INTAKE RULES — 2-3 emotional turns before action
+- VALIDATION-AT-TRANSITIONS — validate before acting on requests
+
+**DRAFT PHASE instruction rewritten:**
+- Before: "Generate a message draft (3-6 lines)..."
+- After: "The system generates the draft separately. Your coaching should ONLY contain a brief transition."
+
+### Code Changes (related — not prompt-only)
+- `messagePipeline.ts`: Reframe generated when `shouldDraft` (not just ACTIVE+userB)
+- `messageHandler.ts`: Removed `draft:approve/edit/cancel` buttons, uses `reframe_approve:` flow
+- `callbackHandler.ts`: `handleReframeApprove` — mark delivered only AFTER send
+- `callbackHandler.ts`: `deliverToPartner` → returns boolean, handles missing partner
+- `callbackHandler.ts`: `handleConsentAccept` — delivers queued approved reframes when User B joins

@@ -359,7 +359,7 @@ async function handleActiveSessionMessage(
       telegramMessageId: ctx.message!.message_id,
     });
 
-    // Send coaching response (with buttons for frustration/draft)
+    // Send coaching response (with buttons for frustration)
     if (result.isFrustrationMenu) {
       await ctx.reply(
         result.coachingResponse,
@@ -367,17 +367,6 @@ async function handleActiveSessionMessage(
           [Markup.button.callback('🙏 התנצלות', `frustration:apology:${sessionContext.sessionId}`)],
           [Markup.button.callback('🛑 גבול', `frustration:boundary:${sessionContext.sessionId}`)],
           [Markup.button.callback('📏 כלל לעתיד', `frustration:future_rule:${sessionContext.sessionId}`)],
-        ])
-      );
-    } else if (result.isDraft) {
-      // Draft phase — coaching already contains the question from Claude prompt.
-      // Do NOT append extra questions (causes Rule 2 violation: 2 questions instead of 1).
-      await ctx.reply(
-        result.coachingResponse,
-        Markup.inlineKeyboard([
-          [Markup.button.callback('✅ שלח', `draft:approve:${sessionContext.sessionId}`)],
-          [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionContext.sessionId}`)],
-          [Markup.button.callback('❌ בטל', `draft:cancel:${sessionContext.sessionId}`)],
         ])
       );
     } else {
@@ -487,21 +476,45 @@ async function handleCoachingMessage(
           [Markup.button.callback('📏 כלל לעתיד', `frustration:future_rule:${sessionId}`)],
         ])
       );
-    } else if (result.isDraft) {
-      // Draft phase — coaching already contains the question from Claude prompt.
-      // Do NOT append extra questions (causes Rule 2 violation: 2 questions instead of 1).
-      await ctx.reply(
-        result.coachingResponse,
-        Markup.inlineKeyboard([
-          [Markup.button.callback('✅ שלח', `draft:approve:${sessionId}`)],
-          [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionId}`)],
-          [Markup.button.callback('❌ בטל', `draft:cancel:${sessionId}`)],
-        ])
-      );
     } else {
       for (const chunk of splitMessage(result.coachingResponse)) {
         await ctx.reply(chunk);
       }
+    }
+
+    // If pipeline generated a reframe for approval (draft phase or active session)
+    if (result.requiresApproval && result.reframedMessage) {
+      const message = await prisma.message.create({
+        data: {
+          sessionId,
+          senderRole: session?.role || 'USER_A',
+          messageType: 'REFRAME',
+          reframedContent: encrypt(result.reframedMessage),
+          rawContent: encrypt(text),
+          riskLevel: result.riskLevel,
+          topicCategory: result.topicCategory,
+        },
+      });
+
+      const pendingItem: PendingReframe = {
+        sessionId,
+        senderRole: session?.role || 'USER_A',
+        reframedText: result.reframedMessage,
+        originalText: text,
+        editIterations: 0,
+        messageId: message.id,
+      };
+
+      pendingReframes.set(message.id, pendingItem);
+
+      await ctx.reply(
+        `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`,
+        Markup.inlineKeyboard([
+          [Markup.button.callback('✅ שלח כפי שזה', `reframe_approve:${message.id}`)],
+          [Markup.button.callback('✏️ אני רוצה לערוך', `reframe_edit:${message.id}`)],
+          [Markup.button.callback('❌ בטל / אל תשלח', `reframe_cancel:${message.id}`)],
+        ])
+      );
     }
   } catch (error) {
     logger.error('Coaching message error', {

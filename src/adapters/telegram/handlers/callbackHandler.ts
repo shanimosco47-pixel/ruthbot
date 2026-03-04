@@ -7,7 +7,7 @@ import { callClaude } from '../../../services/ai/claudeClient';
 // import { env } from '../../../config/env';
 import { logger } from '../../../utils/logger';
 import { splitMessage } from '../../../utils/telegramHelpers';
-import { decrypt } from '../../../utils/encryption';
+import { decrypt, encrypt } from '../../../utils/encryption';
 import { prisma } from '../../../db/client';
 import { MAX_EDIT_ITERATIONS } from '../../../config/constants';
 import { getMessageTemplate } from '../../../utils/responseValidator';
@@ -288,16 +288,30 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
   const session = await SessionManager.getSession(sessionId);
   if (!session) return;
 
-  // Find the latest approved reframe
-  const latestReframe = await prisma.message.findFirst({
+  // Find ALL approved-but-undelivered reframes and mark them delivered
+  const approvedReframes = await prisma.message.findMany({
     where: {
       sessionId,
       messageType: 'REFRAME',
       approved: true,
+      delivered: false,
     },
-    orderBy: { createdAt: 'desc' },
-    select: { reframedContent: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, reframedContent: true },
   });
+
+  // Mark all as delivered now that User B is present
+  if (approvedReframes.length > 0) {
+    await prisma.message.updateMany({
+      where: {
+        id: { in: approvedReframes.map((r) => r.id) },
+      },
+      data: { delivered: true },
+    });
+  }
+
+  // Find the latest approved reframe to show
+  const latestReframe = approvedReframes[approvedReframes.length - 1] || null;
 
   // Decrypt reframed content (stored encrypted at rest)
   let reframedText = '';
@@ -314,10 +328,17 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
     );
   }
 
-  // Start Reflection Gate (Section 2.5, Phase 3, 3B)
-  await ctx.reply(
-    'לפני שנגיב — מה הדבר הראשון שאתה מרגיש כשאתה קורא את זה?'
-  );
+  // Start Reflection Gate with emotional intake for User B
+  if (reframedText) {
+    await ctx.reply(
+      'לפני שנגיב — מה הדבר הראשון שאתה מרגיש כשאתה קורא את זה?'
+    );
+  } else {
+    // No reframe to show — start User B intake
+    await ctx.reply(
+      'שלום! אני רות. בן/בת הזוג שלך פתח/ה את הסשן הזה כי חשוב לו/לה לדבר.\n\nאיך את/ה מרגיש/ה לגבי זה?'
+    );
+  }
 
   userStates.set(telegramId, {
     state: 'reflection_gate_step1',
@@ -339,18 +360,28 @@ async function handleReframeApprove(ctx: Context, _telegramId: string, data: str
     return;
   }
 
-  // Mark as approved and delivered
+  // Mark as approved (but NOT delivered yet — only after successful send)
   await prisma.message.update({
     where: { id: messageId },
-    data: { approved: true, delivered: true, reframedContent: pending.reframedText },
+    data: { approved: true, reframedContent: encrypt(pending.reframedText) },
   });
 
-  // Deliver to partner
-  await deliverToPartner(ctx, pending);
+  // Try to deliver to partner
+  const delivered = await deliverToPartner(ctx, pending);
 
-  pendingReframes.delete(messageId);
-
-  await ctx.reply('✅ ההודעה נשלחה.');
+  if (delivered) {
+    // Mark as delivered only after successful send
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { delivered: true },
+    });
+    pendingReframes.delete(messageId);
+    await ctx.reply('✅ ההודעה נשלחה לבן/בת הזוג.');
+  } else {
+    // Partner not yet in session — message queued for delivery when they join
+    pendingReframes.delete(messageId);
+    await ctx.reply('✅ ההודעה אושרה ותישלח ברגע שבן/בת הזוג יצטרף/תצטרף לסשן.');
+  }
 }
 
 async function handleReframeEdit(ctx: Context, telegramId: string, data: string): Promise<void> {
@@ -510,25 +541,41 @@ async function handleDeleteConfirm(ctx: Context, telegramId: string, data: strin
 // Deliver to Partner
 // ============================================
 
-async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<void> {
+/**
+ * Deliver an approved reframe to the partner.
+ * Returns true if delivery succeeded, false if partner not available.
+ */
+async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<boolean> {
   try {
     const session = await prisma.coupleSession.findUnique({
       where: { id: pending.sessionId },
       select: { userAId: true, userBId: true },
     });
 
-    if (!session) return;
+    if (!session) {
+      logger.warn('deliverToPartner: session not found', { sessionId: pending.sessionId });
+      return false;
+    }
 
     // Determine recipient
     const recipientUserId = pending.senderRole === 'USER_A' ? session.userBId : session.userAId;
-    if (!recipientUserId) return;
+    if (!recipientUserId) {
+      logger.info('deliverToPartner: partner not yet in session, message queued', {
+        sessionId: pending.sessionId,
+        senderRole: pending.senderRole,
+      });
+      return false;
+    }
 
     const recipient = await prisma.user.findUnique({
       where: { id: recipientUserId },
       select: { telegramId: true },
     });
 
-    if (!recipient) return;
+    if (!recipient) {
+      logger.warn('deliverToPartner: recipient user not found', { recipientUserId });
+      return false;
+    }
 
     const recipientTelegramId = decrypt(recipient.telegramId);
 
@@ -543,11 +590,13 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
       sessionId: pending.sessionId,
       senderRole: pending.senderRole,
     });
+    return true;
   } catch (error) {
     logger.error('Failed to deliver message to partner', {
       sessionId: pending.sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
 }
 
