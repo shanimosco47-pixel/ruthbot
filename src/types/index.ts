@@ -58,7 +58,6 @@ export interface PipelineResult {
   halted: boolean;
   haltReason?: string;
   isFrustrationMenu?: boolean;
-  isDraft?: boolean;
 }
 
 // ============================================

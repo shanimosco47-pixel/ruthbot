@@ -338,10 +338,10 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
           `⏰ הסשן שלכם בהשהיה כבר זמן מה. אם לא תחזרו תוך ${hoursLeft} שעות, הסשן ייסגר אוטומטית.\n\nשלחו הודעה כדי להמשיך.`
         );
 
-        // Track that we sent a reminder so we don't spam
+        // Track that we sent a reminder so we don't spam (atomic increment to prevent race conditions)
         await prisma.coupleSession.update({
           where: { id: session.id },
-          data: { idleRemindersSent: session.idleRemindersSent + 1 },
+          data: { idleRemindersSent: { increment: 1 } },
         });
       }
     } catch (error) {

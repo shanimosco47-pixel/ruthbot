@@ -14,7 +14,9 @@ import { getMessageTemplate } from '../../../utils/responseValidator';
 import type { MessageTemplate } from '../../../utils/responseValidator';
 import type { PendingReframe } from '../../../types';
 
-// In-memory store for pending reframes and user states
+// TODO: [PERF REVIEW NEEDED] In-memory state is lost on server restart (Render free tier restarts on deploy and idle).
+// Pending reframes and user states should be persisted to DB for production resilience.
+// Current impact: mid-flow reframes/states lost on restart. Acceptable for MVP, not for scale.
 const pendingReframes = new Map<string, PendingReframe>();
 const userStates = new Map<string, {
   state: string;
@@ -23,6 +25,19 @@ const userStates = new Map<string, {
 }>();
 
 export { userStates, pendingReframes };
+
+/**
+ * Parse and validate callback data with expected number of parts.
+ * Returns null if validation fails.
+ */
+function parseCallbackData(data: string, expectedMinParts: number): string[] | null {
+  const parts = data.split(':');
+  if (parts.length < expectedMinParts) {
+    logger.warn('Malformed callback data', { data, expectedMinParts, actualParts: parts.length });
+    return null;
+  }
+  return parts;
+}
 
 /**
  * Clean up all in-memory state for a given session.
@@ -85,8 +100,6 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
       await handleDeleteConfirm(ctx, telegramId, data);
     } else if (data.startsWith('frustration:')) {
       await handleFrustrationChoice(ctx, telegramId, data);
-    } else if (data.startsWith('draft:')) {
-      await handleDraftChoice(ctx, telegramId, data);
     } else {
       logger.warn('Unknown callback query', { data, telegramId });
     }
@@ -131,7 +144,8 @@ async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise
 // ============================================
 
 async function handleOnboardingChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const choice = parts[1]; // 'invite' or 'solo'
   const sessionId = parts[2];
 
@@ -164,7 +178,8 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
 // ============================================
 
 async function handleTtlChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const ttlHours = parseInt(parts[1], 10) as 1 | 3 | 12;
   const sessionId = parts[2];
 
@@ -222,7 +237,8 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
 // ============================================
 
 async function handleTelegramCheck(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const answer = parts[1]; // 'yes', 'unsure', 'no'
   const sessionId = parts[2];
 
@@ -284,11 +300,16 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
   await SessionManager.recordPartnerConsent(sessionId, userId);
 
+  // Transition to REFLECTION_GATE — User B must mirror before session becomes ACTIVE
+  await SessionStateMachine.transition(sessionId, 'REFLECTION_GATE', {
+    reason: 'partner_consent_accepted',
+  });
+
   // Get the reframed message to show User B
   const session = await SessionManager.getSession(sessionId);
   if (!session) return;
 
-  // Find ALL approved-but-undelivered reframes and mark them delivered
+  // Find ALL approved-but-undelivered reframes
   const approvedReframes = await prisma.message.findMany({
     where: {
       sessionId,
@@ -299,16 +320,6 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
     orderBy: { createdAt: 'asc' },
     select: { id: true, reframedContent: true },
   });
-
-  // Mark all as delivered now that User B is present
-  if (approvedReframes.length > 0) {
-    await prisma.message.updateMany({
-      where: {
-        id: { in: approvedReframes.map((r) => r.id) },
-      },
-      data: { delivered: true },
-    });
-  }
 
   // Find the latest approved reframe to show
   const latestReframe = approvedReframes[approvedReframes.length - 1] || null;
@@ -322,10 +333,20 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
       reframedText = latestReframe.reframedContent;
     }
 
-    // Deliver the reframe (Section 2.5, Phase 3, 3A)
+    // Deliver the reframe FIRST, then mark as delivered (Section 2.5, Phase 3, 3A)
     await ctx.reply(
       `בן/בת הזוג שלך ביקש/ה להעביר לך את הדברים הבאים. ביקשתי ממנו/ממנה לנסח אותם בצורה שתאפשר לכם לדבר בצורה רגועה:\n\n— ${reframedText} —`
     );
+
+    // Only mark as delivered AFTER successful send to User B
+    if (approvedReframes.length > 0) {
+      await prisma.message.updateMany({
+        where: {
+          id: { in: approvedReframes.map((r) => r.id) },
+        },
+        data: { delivered: true },
+      });
+    }
   }
 
   // Start Reflection Gate with emotional intake for User B
@@ -430,7 +451,8 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
 // ============================================
 
 async function handlePartnerDeclinedChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const choice = parts[1]; // 'reminder', 'solo', 'close'
   const sessionId = parts[2];
 
@@ -462,7 +484,8 @@ async function handlePartnerDeclinedChoice(ctx: Context, telegramId: string, dat
 // ============================================
 
 async function handleInviteDraftChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const choice = parts[1]; // 'v1', 'v2', 'regenerate'
   const sessionId = parts[2];
 
@@ -606,40 +629,50 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
 
 async function handleFrustrationChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
   const parts = data.split(':');
+  if (parts.length < 3) {
+    logger.warn('Malformed frustration callback data', { data, telegramId });
+    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+    return;
+  }
   const templateType = parts[1] as MessageTemplate; // 'apology', 'boundary', 'future_rule'
   const sessionId = parts[2];
 
   const template = getMessageTemplate(templateType);
 
+  // Create a proper REFRAME message in DB so it goes through the standard delivery flow
+  const message = await prisma.message.create({
+    data: {
+      sessionId,
+      senderRole: 'USER_A', // Frustration templates are always from User A
+      messageType: 'REFRAME',
+      reframedContent: encrypt(template),
+      rawContent: encrypt(`[frustration template: ${templateType}]`),
+    },
+  });
+
+  const pending: PendingReframe = {
+    sessionId,
+    senderRole: 'USER_A',
+    reframedText: template,
+    originalText: `[frustration template: ${templateType}]`,
+    editIterations: 0,
+    messageId: message.id,
+  };
+
+  pendingReframes.set(message.id, pending);
+
+  // Use standard reframe approval buttons — connects to the working delivery flow
   await ctx.reply(
     `📝 הנה טיוטה:\n\n${template}`,
     Markup.inlineKeyboard([
-      [Markup.button.callback('✅ שלח', `draft:approve:${sessionId}`)],
-      [Markup.button.callback('✏️ ערוך', `draft:edit:${sessionId}`)],
-      [Markup.button.callback('❌ בטל', `draft:cancel:${sessionId}`)],
+      [Markup.button.callback('✅ שלח כפי שזה', `reframe_approve:${message.id}`)],
+      [Markup.button.callback('✏️ אני רוצה לערוך', `reframe_edit:${message.id}`)],
+      [Markup.button.callback('❌ בטל / אל תשלח', `reframe_cancel:${message.id}`)],
     ])
   );
 
   userStates.set(telegramId, { state: 'coaching', sessionId });
 }
 
-// ============================================
-// Draft Choice (Rule 4)
-// ============================================
-
-async function handleDraftChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
-  const choice = parts[1]; // 'approve', 'edit', 'cancel'
-  const sessionId = parts[2];
-
-  if (choice === 'approve') {
-    await ctx.reply('✅ מעולה! ההודעה מוכנה לשליחה.');
-    userStates.set(telegramId, { state: 'coaching', sessionId });
-  } else if (choice === 'edit') {
-    await ctx.reply('כתוב/י את הגרסה שלך:');
-    userStates.set(telegramId, { state: 'coaching', sessionId });
-  } else if (choice === 'cancel') {
-    await ctx.reply('בוטל. אפשר להמשיך לדבר.');
-    userStates.set(telegramId, { state: 'coaching', sessionId });
-  }
-}
+// NOTE: handleDraftChoice removed — frustration templates now use the standard
+// reframe_approve/edit/cancel flow via handleReframeApprove/Edit/Cancel.

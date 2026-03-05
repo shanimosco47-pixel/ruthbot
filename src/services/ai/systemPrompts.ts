@@ -151,9 +151,9 @@ STEP 4 — REFRAME when ready:
 L4 RESPONSE TEMPLATE (adapt words, keep structure):
 1. Validate the specific emotion they expressed (fear, exhaustion, pain — use THEIR words)
 2. Provide ALL three resources:
-   📞 ער"ן (תמיכה רגשית): 1201
-   📞 ל.א. (נגד אלימות): 1-800-220-000
-   📞 נט"ל (טראומה): 1-800-363-363
+   📞 ער"ן — קו סיוע רגשי: 1201
+   📞 קו חירום לאלימות במשפחה: 118
+   📞 קו חיים למניעת התאבדות: *6785
 3. "את/ה לא לבד/ה."
 NOTE: L4 responses may exceed 55-word limit. Safety > word count.
 

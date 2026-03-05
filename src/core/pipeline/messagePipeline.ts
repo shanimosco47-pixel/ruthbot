@@ -13,6 +13,7 @@ import {
   shouldGenerateDraft,
 } from '../../utils/responseValidator';
 import type { PipelineInput, PipelineResult, ConversationMessage, RiskAssessment } from '../../types';
+import type { SenderRole, MessageType } from '@prisma/client';
 
 /**
  * 8-Step Message Pipeline (Section 4.2 of PRD):
@@ -49,7 +50,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   const isFrustrated = detectFrustration(rawText);
   const shouldDraft = shouldGenerateDraft(turnCount, conversationHistory, context.currentRole);
 
-  logger.info('RUTH V2 state', {
+  logger.info('RUTH V3 state', {
     sessionId: context.sessionId,
     turnCount,
     isFrustrated,
@@ -66,17 +67,15 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
       senderRole: context.currentRole,
     });
 
-    // Store user message (fire and forget)
-    prisma.message.create({
-      data: {
-        sessionId: context.sessionId,
-        senderRole: context.currentRole,
-        messageType: input.messageType,
-        rawContent: encrypt(rawText),
-        riskLevel: riskAssessment.risk_level,
-        topicCategory: riskAssessment.topic_category,
-      },
-    }).catch((err) => logger.error('Failed to store message', { error: err instanceof Error ? err.message : String(err) }));
+    // Store user message (await with retry — message loss is unacceptable for mediation)
+    await storeMessageWithRetry({
+      sessionId: context.sessionId,
+      senderRole: context.currentRole,
+      messageType: input.messageType,
+      rawContent: encrypt(rawText),
+      riskLevel: riskAssessment.risk_level,
+      topicCategory: riskAssessment.topic_category,
+    });
 
     // L4 even for frustrated users — safety first
     if (riskAssessment.risk_level === 'L4') {
@@ -122,17 +121,15 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     isFrustrated,
   });
 
-  // Store user message (fire and forget)
-  prisma.message.create({
-    data: {
-      sessionId: context.sessionId,
-      senderRole: context.currentRole,
-      messageType: input.messageType,
-      rawContent: encrypt(rawText),
-      riskLevel: riskAssessment.risk_level,
-      topicCategory: riskAssessment.topic_category,
-    },
-  }).catch((err) => logger.error('Failed to store message', { error: err instanceof Error ? err.message : String(err) }));
+  // Store user message (await with retry — message loss is unacceptable for mediation)
+  await storeMessageWithRetry({
+    sessionId: context.sessionId,
+    senderRole: context.currentRole,
+    messageType: input.messageType,
+    rawContent: encrypt(rawText),
+    riskLevel: riskAssessment.risk_level,
+    topicCategory: riskAssessment.topic_category,
+  });
 
   // ================================================
   // L4: HARD STOP
@@ -207,7 +204,6 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     reframedMessage,
     requiresApproval,
     halted: false,
-    isDraft: shouldDraft,
   };
 }
 
@@ -324,6 +320,37 @@ async function getPatternSummaries(anonymizedCoupleId: string, currentMessage?: 
     anonymizedCoupleId,
     currentMessage: currentMessage || '',
   });
+}
+
+/**
+ * Store a message with one retry on failure.
+ * Mediation messages are sensitive — silent loss is unacceptable.
+ */
+async function storeMessageWithRetry(data: {
+  sessionId: string;
+  senderRole: SenderRole;
+  messageType: MessageType;
+  rawContent: string;
+  riskLevel?: string;
+  topicCategory?: string;
+}): Promise<void> {
+  try {
+    await prisma.message.create({ data });
+  } catch (err) {
+    logger.warn('Message store failed, retrying once', {
+      sessionId: data.sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    try {
+      await prisma.message.create({ data });
+    } catch (retryErr) {
+      // Log as error but don't crash the pipeline — the user still needs a response
+      logger.error('Message store failed after retry — message lost', {
+        sessionId: data.sessionId,
+        error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+      });
+    }
+  }
 }
 
 /**

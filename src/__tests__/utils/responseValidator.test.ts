@@ -1,5 +1,5 @@
 /**
- * RUTH V2 BEHAVIORAL TESTS
+ * RUTH V3 BEHAVIORAL TESTS
  * Score threshold: 90/100 = Pass
  *
  * Component 1: Intake Quality (25 points)
@@ -464,7 +464,7 @@ describe('Component 4: Overall Success', () => {
 // SCORING SUMMARY
 // ============================================
 
-describe('RUTH V2 Scoring Summary', () => {
+describe('RUTH V3 Scoring Summary', () => {
   it('should have all components testable', () => {
     // This is a meta-test that verifies all 4 components are covered
     // Component 1: Intake Quality - intake template, speed, clarity

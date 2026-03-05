@@ -203,7 +203,7 @@ describe('Raz Scenario — Intake to Draft in ≤8 turns', () => {
     expect(result.coachingResponse).toBeDefined();
   });
 
-  it('Turn 5: should generate draft (RUTH V2 RULE 4)', async () => {
+  it('Turn 5: should generate draft (RUTH V3 RULE 4)', async () => {
     conversationHistory = [
       { role: 'USER_A', content: 'היי', timestamp: new Date() },
       { role: 'BOT', content: 'מה קרה?', timestamp: new Date() },

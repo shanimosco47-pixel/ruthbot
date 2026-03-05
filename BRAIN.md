@@ -1,23 +1,35 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-03-04 (V3 code deployed to GitHub, pending Render deploy)
+> Last updated: 2026-03-05 (V3.1 code review fixes — safety, delivery, state machine)
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V3 — CODE ON GITHUB, RENDER DEPLOY NEEDED 🔶
+## Current Status: RUTH V3.1 — CODE REVIEW FIXES APPLIED 🔶
 
 The bot is **live in production** on Render free tier (webhook mode) — currently running **V2.3**.
-V3 code is pushed to GitHub (`7aff470`) but Render auto-deploy is OFF — manual deploy required.
+V3.1 code (V3 + code review fixes) is local — needs push to GitHub + manual Render deploy.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **GitHub commit:** `7aff470` (V3 prompt + v3.0 health version)
+- **Last GitHub commit:** `34f4306` (V3 reframe delivery fix)
 - **Last Render deploy:** 2026-02-28 — Commit `de076fe` — still running V2.3
-- **⚡ TO DEPLOY V3:** Go to https://dashboard.render.com/web/srv-d6cv7nvfte5s73d2btp0 → "Manual Deploy" → "Deploy latest commit"
+- **⚡ TO DEPLOY V3.1:** Commit review fixes → `git push` → Render "Manual Deploy" → "Deploy latest commit"
 - **V2 Training score:** 44 → 90.3 across 13 training runs
 - **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
+
+### RUTH V3.1 Code Review Fixes (2026-03-05)
+- **C1 — Emergency resources mismatch:** Unified L4 prompt template numbers to match `constants.ts` (violence: 118, suicide: *6785)
+- **C2 — Fire-and-forget message storage:** Replaced with `storeMessageWithRetry()` — await + one retry on failure
+- **C3 — Dead draft:approve path:** Frustration templates now create proper REFRAME records and use `reframe_approve/edit/cancel` flow
+- **C4 — Delivery before DB mark:** In `handleConsentAccept`, reframes now marked `delivered: true` AFTER successful Telegram send
+- **I2 — Missing REFLECTION_GATE:** Added `SessionStateMachine.transition(sessionId, 'REFLECTION_GATE')` in `handleConsentAccept`
+- **I5 — Callback data validation:** Added `parseCallbackData()` helper with min-parts check to all callback handlers
+- **I6 — Race condition:** Changed `idleRemindersSent` update to Prisma atomic `{ increment: 1 }`
+- **S1 — Log version:** Updated "RUTH V2 state" → "RUTH V3 state" in pipeline
+- **S3 — Dead code:** Removed `isDraft` from `PipelineResult` type
+- **Files modified:** `systemPrompts.ts`, `messagePipeline.ts`, `callbackHandler.ts`, `index.ts`, `types/index.ts`, `BRAIN.md`
 
 ### RUTH V3 System Prompt Upgrade (2026-03-04)
 - **Full training pipeline:** 145 synthetic conversations (100 gold + 45 noise), 20 benchmark scenarios, 3 A/B variants, 2 improvement iterations
@@ -246,7 +258,7 @@ ASYNC_COACHING (parallel solo mode for User A)
 - **Root cause:** Was 2 sequential Claude Sonnet API calls (risk ~3s + coaching ~7s)
 - **Fix:** Combined into single `classifyRiskAndCoach()` call (~5-8s total)
 - **Fix:** Risk classification + DB queries run in parallel via Promise.all
-- **Fix:** Message storage is fire-and-forget (non-blocking)
+- **Fix:** Message storage uses `storeMessageWithRetry()` (V3.1 — was fire-and-forget, now awaited with 1 retry)
 - **Fix (V2.4):** Prompt caching reduces input tokens ~90% on repeated calls
 
 ### 2. Bot Describing Architecture Wrong — FIXED (V2.5)
@@ -353,9 +365,9 @@ Same as `.env` with:
 
 ## Git State
 - **Branch:** master
-- **Last commit:** (pending) — RUTH V2.5: session close fix + architecture fix
-- **Previous commits:** `a04e55b` (BRAIN.md update), `d898342` (architecture fix), `de076fe` (V2.4)
-- **All 12 phases committed and merged + V2 → V2.5 iterations**
+- **Last commit:** `34f4306` — fix: reframe delivery pipeline + clinical prompt improvements
+- **Previous commits:** `7aff470` (v3.0 health), `e9c170c` (V3 prompt), `2dd7be5` (idle reminder fix), `5fd587f` (summary mid-flow fix)
+- **All 12 phases committed and merged + V2 → V3.1 iterations**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
 
