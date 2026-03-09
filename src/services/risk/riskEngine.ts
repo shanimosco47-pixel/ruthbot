@@ -210,7 +210,7 @@ export async function classifyRiskAndCoach(params: {
         action_required: 'URGENT: Combined risk+coaching failed — manual review required',
         reasoning: 'Automatic RESTRICTIVE fallback due to API failure — classified as L3_PLUS for safety',
       },
-      coaching: 'אירעה שגיאה זמנית. ספר/י לי מה קורה — אני כאן.\n\nאם את/ה במצוקה, אפשר לפנות לער"ן (עזרה ראשונה נפשית): 1201',
+      coaching: 'סליחה, נתקלתי בבעיה טכנית רגעית. אפשר לנסות שוב — אני כאן.',
     };
   }
 }
