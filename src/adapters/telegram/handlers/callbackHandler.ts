@@ -180,7 +180,12 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
 async function handleTtlChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
   const parts = parseCallbackData(data, 3);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
-  const ttlHours = parseInt(parts[1], 10) as 1 | 3 | 12;
+  const ttlValue = parseInt(parts[1], 10);
+  if (![1, 3, 12].includes(ttlValue)) {
+    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+    return;
+  }
+  const ttlHours = ttlValue as 1 | 3 | 12;
   const sessionId = parts[2];
 
   const state = userStates.get(telegramId);
@@ -294,7 +299,9 @@ async function showTtlSelection(ctx: Context, sessionId: string): Promise<void> 
 // ============================================
 
 async function handleConsentAccept(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const sessionId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const sessionId = parts[1];
 
   // NOW we can store User B's data (GDPR: only after consent)
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
@@ -373,7 +380,9 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 // ============================================
 
 async function handleReframeApprove(ctx: Context, _telegramId: string, data: string): Promise<void> {
-  const messageId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const messageId = parts[1];
   const pending = pendingReframes.get(messageId);
 
   if (!pending) {
@@ -406,7 +415,9 @@ async function handleReframeApprove(ctx: Context, _telegramId: string, data: str
 }
 
 async function handleReframeEdit(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const messageId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const messageId = parts[1];
   const pending = pendingReframes.get(messageId);
 
   if (!pending) {
@@ -435,7 +446,9 @@ async function handleReframeEdit(ctx: Context, telegramId: string, data: string)
 }
 
 async function handleReframeCancel(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const messageId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const messageId = parts[1];
   pendingReframes.delete(messageId);
 
   await ctx.reply('ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.');
@@ -530,7 +543,8 @@ async function handleInviteDraftChoice(ctx: Context, telegramId: string, data: s
 // ============================================
 
 async function handleEmailOptChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const choice = parts[1]; // 'yes' or 'no'
 
   if (choice === 'yes') {
@@ -547,7 +561,9 @@ async function handleEmailOptChoice(ctx: Context, telegramId: string, data: stri
 // ============================================
 
 async function handleDeleteConfirm(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const choice = data.split(':')[1]; // 'yes' or 'no'
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const choice = parts[1]; // 'yes' or 'no'
 
   if (choice === 'yes') {
     // Actual deletion handled by deleteHandler
@@ -628,12 +644,8 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
 // ============================================
 
 async function handleFrustrationChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
-  if (parts.length < 3) {
-    logger.warn('Malformed frustration callback data', { data, telegramId });
-    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
-    return;
-  }
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const templateType = parts[1] as MessageTemplate; // 'apology', 'boundary', 'future_rule'
   const sessionId = parts[2];
 

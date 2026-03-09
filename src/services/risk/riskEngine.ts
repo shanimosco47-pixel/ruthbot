@@ -50,12 +50,13 @@ export async function classifyRisk(params: {
         raw: JSON.stringify(raw).substring(0, 500),
       });
 
-      // Fallback: conservative classification
+      // SAFETY: On invalid output, assume worst case — NOT permissive L2.
+      // L3_PLUS prevents reframing and includes professional referral resources.
       return {
-        risk_level: 'L2',
+        risk_level: 'L3_PLUS',
         topic_category: FALLBACK_TOPIC_CATEGORY,
-        action_required: 'Manual review — Risk Engine returned invalid format',
-        reasoning: 'Automatic fallback due to parsing error',
+        action_required: 'URGENT: Risk Engine returned invalid format — manual review required',
+        reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — classified as L3_PLUS for safety',
       };
     }
 
@@ -165,7 +166,7 @@ export async function classifyRiskAndCoach(params: {
       const riskResult = riskAssessmentSchema.safeParse(rawRisk);
       const risk: RiskAssessment = riskResult.success
         ? riskResult.data
-        : { risk_level: 'L2', topic_category: FALLBACK_TOPIC_CATEGORY, action_required: 'Fallback — invalid combined response', reasoning: 'Automatic fallback due to parsing error' };
+        : { risk_level: 'L3_PLUS', topic_category: FALLBACK_TOPIC_CATEGORY, action_required: 'URGENT: Invalid combined response — manual review required', reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — classified as L3_PLUS for safety' };
 
       const coaching = typeof rawCoaching === 'string' && rawCoaching.length > 0
         ? checkResponseQuality(rawCoaching)
