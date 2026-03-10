@@ -112,6 +112,7 @@ export async function handleVoice(ctx: Context): Promise<void> {
       const pending: PendingReframe = {
         sessionId: session.id,
         senderRole: session.role,
+        ownerTelegramId: telegramId,
         reframedText: result.reframedMessage,
         originalText: transcript,
         editIterations: 0,

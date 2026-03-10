@@ -57,12 +57,30 @@ describe('Encryption Utils', () => {
       expect(decrypt(encrypted2)).toBe(original);
     });
 
-    it('should produce ciphertext in iv:data format', () => {
+    it('should produce ciphertext in gcm:iv:authTag:data format', () => {
       const encrypted = encrypt('test');
-      expect(encrypted).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
-      const [ivHex] = encrypted.split(':');
-      // IV should be 16 bytes = 32 hex chars
-      expect(ivHex.length).toBe(32);
+      expect(encrypted).toMatch(/^gcm:[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
+      const [prefix, ivHex, authTagHex] = encrypted.split(':');
+      expect(prefix).toBe('gcm');
+      // GCM IV should be 12 bytes = 24 hex chars
+      expect(ivHex.length).toBe(24);
+      // Auth tag should be 16 bytes = 32 hex chars
+      expect(authTagHex.length).toBe(32);
+    });
+
+    it('should decrypt legacy CBC format (backward compatibility)', () => {
+      // Simulate a legacy CBC encrypted value by using the raw crypto API
+      const crypto = require('crypto');
+      const key = Buffer.from(process.env.ENCRYPTION_KEY || '0'.repeat(64), 'hex');
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      let encrypted = cipher.update('legacy data', 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      const legacyCiphertext = `${iv.toString('hex')}:${encrypted}`;
+
+      // Should be able to decrypt legacy format
+      const decrypted = decrypt(legacyCiphertext);
+      expect(decrypted).toBe('legacy data');
     });
   });
 

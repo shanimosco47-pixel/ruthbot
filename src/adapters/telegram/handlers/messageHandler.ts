@@ -344,13 +344,22 @@ async function handleReflectionMirror(
   const currentAttempts = await SessionManager.incrementMirrorAttempts(state.sessionId);
 
   if (evaluation.mirror_quality === 'GOOD' || currentAttempts >= MAX_REFLECTION_REPROMPTS) {
+    // Transition to ACTIVE — wrapped in try-catch to prevent stuck state
+    try {
+      await SessionStateMachine.transition(state.sessionId, 'ACTIVE');
+    } catch (transitionError) {
+      logger.error('Failed to transition from REFLECTION_GATE to ACTIVE', {
+        sessionId: state.sessionId,
+        error: transitionError instanceof Error ? transitionError.message : String(transitionError),
+      });
+      await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+      return;
+    }
+
     // Proceed to Empathy Bridge
     await ctx.reply(
       'תודה ששיקפת 🙏\n\nעכשיו הבוט יעזור לך לנסח את התגובה שלך — גם אתה זכאי/ת להישמע.'
     );
-
-    // Transition to ACTIVE
-    await SessionStateMachine.transition(state.sessionId, 'ACTIVE');
 
     userStates.set(telegramId, { state: 'coaching', sessionId: state.sessionId });
   } else if (evaluation.mirror_quality === 'PARTIAL' || evaluation.mirror_quality === 'MISSED') {
@@ -385,7 +394,7 @@ async function handleReflectionMirror(
 
 async function handleActiveSessionMessage(
   ctx: Context,
-  _telegramId: string,
+  telegramId: string,
   text: string,
   sessionContext: SessionContext
 ): Promise<void> {
@@ -433,6 +442,7 @@ async function handleActiveSessionMessage(
       const pending: PendingReframe = {
         sessionId: sessionContext.sessionId,
         senderRole: sessionContext.currentRole,
+        ownerTelegramId: telegramId,
         reframedText: result.reframedMessage,
         originalText: text,
         editIterations: 0,
@@ -542,6 +552,7 @@ async function handleCoachingMessage(
       const pendingItem: PendingReframe = {
         sessionId,
         senderRole: session?.role || 'USER_A',
+        ownerTelegramId: telegramId,
         reframedText: result.reframedMessage,
         originalText: text,
         editIterations: 0,

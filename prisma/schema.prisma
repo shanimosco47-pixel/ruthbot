@@ -75,6 +75,9 @@ model CoupleSession {
 
   @@index([status, updatedAt])
   @@index([status, inviteTokenExpiresAt, inviteTokenUsed])
+  @@index([userAId])
+  @@index([userBId])
+  @@index([anonymizedCoupleId])
   @@map("couple_sessions")
 }
 
@@ -136,6 +139,7 @@ model SessionTelemetry {
   maxRiskLevel          String?  @map("max_risk_level")
   createdAt             DateTime @default(now()) @map("created_at")
 
+  @@index([anonymizedCoupleId])
   @@map("session_telemetry")
 }
 
@@ -149,6 +153,7 @@ model SessionEmbedding {
   // vector field added via raw SQL migration for pgvector
   createdAt             DateTime @default(now()) @map("created_at")
 
+  @@index([anonymizedCoupleId])
   @@map("session_embeddings")
 }
 

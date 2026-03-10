@@ -189,11 +189,18 @@ export class SessionManager {
       }
     }
 
-    // Mark token as used (but DON'T store User B data yet — GDPR: wait for consent)
-    await prisma.coupleSession.update({
-      where: { id: session.id },
+    // Mark token as used ATOMICALLY — prevents double-join race condition where two
+    // concurrent requests both pass validation before either marks the token as used.
+    // updateMany with WHERE clause acts as a compare-and-swap operation.
+    const updated = await prisma.coupleSession.updateMany({
+      where: { id: session.id, inviteTokenUsed: false },
       data: { inviteTokenUsed: true },
     });
+
+    if (updated.count === 0) {
+      // Another request already consumed this token between our read and write
+      return { error: 'הלינק כבר שומש. פנה/י לשולח/ת לקבלת לינק חדש.' };
+    }
 
     // Transition to PENDING_PARTNER_CONSENT
     await SessionStateMachine.transition(session.id, 'PENDING_PARTNER_CONSENT');
@@ -214,6 +221,9 @@ export class SessionManager {
     sessionId: string,
     userBId: string
   ): Promise<void> {
+    // Transition FIRST — if it fails, User B data is NOT stored (atomicity guarantee)
+    await SessionStateMachine.transition(sessionId, 'REFLECTION_GATE');
+
     await prisma.coupleSession.update({
       where: { id: sessionId },
       data: {
@@ -221,9 +231,6 @@ export class SessionManager {
         partnerJoined: true,
       },
     });
-
-    // Transition to REFLECTION_GATE
-    await SessionStateMachine.transition(sessionId, 'REFLECTION_GATE');
 
     logger.info('Partner consent recorded', {
       sessionId,

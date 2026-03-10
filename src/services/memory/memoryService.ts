@@ -60,10 +60,16 @@ export async function generateSessionEmbedding(params: {
         try {
           content = decrypt(m.rawContent!);
         } catch {
-          content = m.rawContent!;
+          // SECURITY: Never pass encrypted ciphertext to AI — skip this message
+          logger.warn('Failed to decrypt message for embedding summary, skipping', {
+            sessionId,
+            senderRole: m.senderRole,
+          });
+          return null;
         }
         return `[${m.senderRole}] ${content}`;
       })
+      .filter((line): line is string => line !== null)
       .join('\n');
 
     // Single Claude call for both summary and emotion tags (was 2 separate calls)

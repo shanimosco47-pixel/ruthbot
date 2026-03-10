@@ -29,6 +29,18 @@ import type { SenderRole, MessageType } from '@prisma/client';
 export async function processMessage(input: PipelineInput): Promise<PipelineResult> {
   const { context, rawText } = input;
 
+  // Guard: reject empty or whitespace-only messages before wasting API calls
+  if (!rawText || rawText.trim().length === 0) {
+    return {
+      riskLevel: 'L1',
+      topicCategory: 'GENERAL' as PipelineResult['topicCategory'],
+      coachingResponse: 'לא קיבלתי הודעה. נסה/י שוב.',
+      reframedMessage: null,
+      requiresApproval: false,
+      halted: false,
+    };
+  }
+
   logger.info('Pipeline started', {
     sessionId: context.sessionId,
     role: context.currentRole,
