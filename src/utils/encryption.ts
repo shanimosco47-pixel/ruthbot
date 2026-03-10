@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
 
-const ALGORITHM = 'aes-256-cbc';
-const IV_LENGTH = 16;
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // GCM standard: 12 bytes (96 bits)
+// Legacy CBC support for reading old data during migration
+const LEGACY_ALGORITHM = 'aes-256-cbc';
 
 function getKey(): Buffer {
   return Buffer.from(env.ENCRYPTION_KEY, 'hex');
@@ -10,27 +12,48 @@ function getKey(): Buffer {
 
 export function encrypt(text: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv) as crypto.CipherGCM;
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  return `${iv.toString('hex')}:${encrypted}`;
+  const authTag = cipher.getAuthTag().toString('hex');
+  // Format: iv:encrypted:authTag (3 parts = GCM)
+  return `${iv.toString('hex')}:${encrypted}:${authTag}`;
 }
 
 export function decrypt(encryptedText: string): string {
-  const [ivHex, encrypted] = encryptedText.split(':');
-  if (!ivHex || !encrypted) {
+  const parts = encryptedText.split(':');
+
+  if (parts.length === 3) {
+    // GCM format: iv:encrypted:authTag
+    const [ivHex, encrypted, authTagHex] = parts;
+    if (!ivHex || encrypted === undefined || !authTagHex) {
+      throw new Error('Invalid encrypted text format');
+    }
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv) as crypto.DecipherGCM;
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } else if (parts.length === 2) {
+    // Legacy CBC format: iv:encrypted (2 parts)
+    const [ivHex, encrypted] = parts;
+    if (!ivHex || !encrypted) {
+      throw new Error('Invalid encrypted text format');
+    }
+    const iv = Buffer.from(ivHex, 'hex');
+    const decipher = crypto.createDecipheriv(LEGACY_ALGORITHM, getKey(), iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } else {
     throw new Error('Invalid encrypted text format');
   }
-  const iv = Buffer.from(ivHex, 'hex');
-  const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
 }
 
 /**
  * Derive a separate HMAC key from the AES key to avoid key reuse.
- * Using the same key for both AES-CBC and HMAC weakens both operations.
  */
 function getHmacKey(): Buffer {
   return crypto.createHash('sha256').update(Buffer.concat([getKey(), Buffer.from('hmac-key-derivation')])).digest();

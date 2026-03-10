@@ -36,6 +36,8 @@ describe('Encryption Utils', () => {
     it('should encrypt and decrypt empty string', () => {
       const original = '';
       const encrypted = encrypt(original);
+      // GCM with empty plaintext produces iv::authTag (empty ciphertext part)
+      // This is a valid edge case — decrypt handles it
       const decrypted = decrypt(encrypted);
       expect(decrypted).toBe(original);
     });
@@ -57,12 +59,14 @@ describe('Encryption Utils', () => {
       expect(decrypt(encrypted2)).toBe(original);
     });
 
-    it('should produce ciphertext in iv:data format', () => {
+    it('should produce ciphertext in iv:data:authTag GCM format', () => {
       const encrypted = encrypt('test');
-      expect(encrypted).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
-      const [ivHex] = encrypted.split(':');
-      // IV should be 16 bytes = 32 hex chars
-      expect(ivHex.length).toBe(32);
+      expect(encrypted).toMatch(/^[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
+      const [ivHex, , authTagHex] = encrypted.split(':');
+      // IV should be 12 bytes = 24 hex chars (GCM standard)
+      expect(ivHex.length).toBe(24);
+      // Auth tag should be 16 bytes = 32 hex chars
+      expect(authTagHex.length).toBe(32);
     });
   });
 
@@ -78,13 +82,21 @@ describe('Encryption Utils', () => {
       expect(() => decrypt(':encrypted_data')).toThrow('Invalid encrypted text format');
     });
 
-    it('should throw on empty data part', () => {
+    it('should throw on empty data part (legacy CBC format)', () => {
       expect(() => decrypt('abc123:')).toThrow('Invalid encrypted text format');
     });
 
-    it('should throw on corrupted ciphertext', () => {
+    it('should throw on empty iv or authTag (GCM format)', () => {
+      expect(() => decrypt('::abc123')).toThrow('Invalid encrypted text format');
+      expect(() => decrypt('abc123:data:')).toThrow('Invalid encrypted text format');
+    });
+
+    it('should throw on corrupted ciphertext (GCM auth tag mismatch)', () => {
       const encrypted = encrypt('test');
-      const corrupted = encrypted.replace(/[0-9a-f]$/, 'z');
+      const parts = encrypted.split(':');
+      // Flip a character in the ciphertext portion (middle part) to trigger GCM auth failure
+      const flipped = parts[1].replace(/^(.)/, (c) => c === '0' ? '1' : '0');
+      const corrupted = `${parts[0]}:${flipped}:${parts[2]}`;
       expect(() => decrypt(corrupted)).toThrow();
     });
   });

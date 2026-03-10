@@ -305,12 +305,8 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 
   // NOW we can store User B's data (GDPR: only after consent)
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
+  // recordPartnerConsent already transitions to REFLECTION_GATE internally
   await SessionManager.recordPartnerConsent(sessionId, userId);
-
-  // Transition to REFLECTION_GATE — User B must mirror before session becomes ACTIVE
-  await SessionStateMachine.transition(sessionId, 'REFLECTION_GATE', {
-    reason: 'partner_consent_accepted',
-  });
 
   // Get the reframed message to show User B
   const session = await SessionManager.getSession(sessionId);

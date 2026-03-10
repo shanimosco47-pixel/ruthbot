@@ -56,14 +56,16 @@ export async function generateSessionEmbedding(params: {
     const conversationText = messages
       .filter((m) => m.rawContent)
       .map((m) => {
-        let content: string;
         try {
-          content = decrypt(m.rawContent!);
+          const content = decrypt(m.rawContent!);
+          return `[${m.senderRole}] ${content}`;
         } catch {
-          content = m.rawContent!;
+          // Skip messages that fail decryption — sending encrypted hex to Claude is a data leak
+          logger.warn('Failed to decrypt message for embedding, skipping', { sessionId });
+          return null;
         }
-        return `[${m.senderRole}] ${content}`;
       })
+      .filter((line): line is string => line !== null)
       .join('\n');
 
     // Single Claude call for both summary and emotion tags (was 2 separate calls)

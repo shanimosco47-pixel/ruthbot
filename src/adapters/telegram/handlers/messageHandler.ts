@@ -52,6 +52,12 @@ export async function handleMessage(ctx: Context): Promise<void> {
         await handleReflectionMirror(ctx, telegramId, text, state);
         return;
 
+      case 'invitation_draft_selection':
+      case 'pre_invite':
+        // User sent text while buttons are active — ignore text, remind to use buttons
+        await ctx.reply('בחר/י מהאפשרויות שלמעלה ☝️');
+        return;
+
       case 'awaiting_email':
         await handleEmailInput(ctx, telegramId, text);
         return;
