@@ -89,6 +89,7 @@ model Message {
   delivered       Boolean       @default(false)
   riskLevel       String?       @map("risk_level")
   topicCategory   String?       @map("topic_category")
+  idempotencyKey  String?       @unique @map("idempotency_key") // prevents duplicate storage on retry
   createdAt       DateTime      @default(now()) @map("created_at")
 
   session         CoupleSession @relation(fields: [sessionId], references: [id])

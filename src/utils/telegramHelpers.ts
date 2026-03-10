@@ -36,11 +36,15 @@ export function splitMessage(text: string, maxLength: number = TELEGRAM_MAX_MESS
       splitIndex = maxLength;
     }
 
-    chunks.push(remaining.substring(0, splitIndex).trim());
+    const chunk = remaining.substring(0, splitIndex).trim();
     remaining = remaining.substring(splitIndex).trim();
+    if (chunk.length > 0) {
+      chunks.push(chunk);
+    }
   }
 
-  return chunks;
+  // Guard against edge case where all chunks were whitespace-only
+  return chunks.length > 0 ? chunks : [text.trim() || text];
 }
 
 /**

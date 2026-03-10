@@ -32,7 +32,7 @@ export async function sendSessionSummaryEmail(params: SessionSummaryEmail): Prom
     resourceTitle: resource.title,
     resourceUrl: resource.url,
     ctaUrl,
-    unsubscribeUrl: unsubscribeUrl || `${ctaUrl}?start=unsubscribe`,
+    unsubscribeUrl: unsubscribeUrl || `${ctaUrl}${ctaUrl.includes('t.me') ? '?start=unsubscribe' : '/unsubscribe'}`,
   });
 
   try {

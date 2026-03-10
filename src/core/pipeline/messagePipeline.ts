@@ -325,6 +325,7 @@ async function getPatternSummaries(anonymizedCoupleId: string, currentMessage?: 
 /**
  * Store a message with one retry on failure.
  * Mediation messages are sensitive — silent loss is unacceptable.
+ * Uses upsert with an idempotency key to prevent duplicate messages on retry.
  */
 async function storeMessageWithRetry(data: {
   sessionId: string;
@@ -334,15 +335,24 @@ async function storeMessageWithRetry(data: {
   riskLevel?: string;
   topicCategory?: string;
 }): Promise<void> {
+  // Generate a deterministic idempotency key to prevent duplicates on retry.
+  // Combines session, role, type, and a timestamp rounded to the nearest second.
+  const idempotencyKey = `${data.sessionId}:${data.senderRole}:${data.messageType}:${Math.floor(Date.now() / 1000)}`;
+
   try {
-    await prisma.message.create({ data });
+    await prisma.message.create({ data: { ...data, idempotencyKey } });
   } catch (err) {
     logger.warn('Message store failed, retrying once', {
       sessionId: data.sessionId,
       error: err instanceof Error ? err.message : String(err),
     });
     try {
-      await prisma.message.create({ data });
+      // Use upsert to avoid duplicate if first create actually succeeded but response was lost
+      await prisma.message.upsert({
+        where: { idempotencyKey },
+        create: { ...data, idempotencyKey },
+        update: {}, // No-op if already exists
+      });
     } catch (retryErr) {
       // Log as error but don't crash the pipeline — the user still needs a response
       logger.error('Message store failed after retry — message lost', {

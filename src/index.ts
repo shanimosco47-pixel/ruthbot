@@ -6,6 +6,14 @@ import { orchestrateSessionClose } from './core/orchestrator/sessionCloseOrchest
 import { prisma } from './db/client';
 import { logger } from './utils/logger';
 import { decrypt } from './utils/encryption';
+import {
+  PERIODIC_SESSION_EXPIRY_CHECK_MS,
+  PERIODIC_TOKEN_EXPIRY_CHECK_MS,
+  PERIODIC_IDLE_PAUSE_CHECK_MS,
+  PERIODIC_CONSENT_TIMEOUT_CHECK_MS,
+  PERIODIC_PAUSE_REMINDER_CHECK_MS,
+  CONSENT_TIMEOUT_MINUTES,
+} from './config/constants';
 import { Telegraf } from 'telegraf';
 import http from 'http';
 
@@ -175,7 +183,7 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 5 * 60 * 1000));
+  }, PERIODIC_SESSION_EXPIRY_CHECK_MS));
 
   // Check for expired invite tokens (every minute)
   timers.push(setInterval(async () => {
@@ -226,7 +234,7 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 60 * 1000));
+  }, PERIODIC_TOKEN_EXPIRY_CHECK_MS));
 
   // Auto-pause idle ACTIVE sessions (every 5 minutes)
   timers.push(setInterval(async () => {
@@ -259,10 +267,9 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 5 * 60 * 1000));
+  }, PERIODIC_IDLE_PAUSE_CHECK_MS));
 
   // Auto-decline PENDING_PARTNER_CONSENT sessions (every 2 minutes)
-  const CONSENT_TIMEOUT_MINUTES = 15;
   timers.push(setInterval(async () => {
     try {
       const consentTimeout = new Date(Date.now() - CONSENT_TIMEOUT_MINUTES * 60 * 1000);
@@ -314,7 +321,7 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 2 * 60 * 1000));
+  }, PERIODIC_CONSENT_TIMEOUT_CHECK_MS));
 
   // Send reminders to PAUSED sessions before auto-close (every 5 minutes)
   timers.push(setInterval(async () => {
@@ -349,7 +356,7 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, 5 * 60 * 1000));
+  }, PERIODIC_PAUSE_REMINDER_CHECK_MS));
 
   return timers;
 }

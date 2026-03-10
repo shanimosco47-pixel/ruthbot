@@ -296,6 +296,22 @@ async function showTtlSelection(ctx: Context, sessionId: string): Promise<void> 
 async function handleConsentAccept(ctx: Context, telegramId: string, data: string): Promise<void> {
   const sessionId = data.split(':')[1];
 
+  // Validate session is still in PENDING_PARTNER_CONSENT before proceeding
+  const currentSession = await prisma.coupleSession.findUnique({
+    where: { id: sessionId },
+    select: { status: true },
+  });
+
+  if (!currentSession || currentSession.status !== 'PENDING_PARTNER_CONSENT') {
+    logger.warn('Consent accept attempted on invalid session status', {
+      sessionId,
+      status: currentSession?.status,
+      telegramId,
+    });
+    await ctx.reply('הסשן כבר לא ממתין לאישור. ייתכן שפג תוקפו או שנסגר.');
+    return;
+  }
+
   // NOW we can store User B's data (GDPR: only after consent)
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
   await SessionManager.recordPartnerConsent(sessionId, userId);

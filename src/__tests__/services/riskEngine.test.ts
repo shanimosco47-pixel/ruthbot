@@ -152,7 +152,7 @@ describe('Risk Engine', () => {
   // Zod validation fallback
   // ============================================
   describe('Zod validation fallback', () => {
-    it('should fallback to L2 when risk_level is invalid', async () => {
+    it('should fallback to L3_PLUS when risk_level is invalid', async () => {
       mockCallClaudeJSON.mockResolvedValue({
         risk_level: 'INVALID_LEVEL',
         topic_category: 'תקשורת ורגש',
@@ -166,11 +166,11 @@ describe('Risk Engine', () => {
         senderRole: 'USER_A',
       });
 
-      expect(result.risk_level).toBe('L2');
+      expect(result.risk_level).toBe('L3_PLUS');
       expect(result.topic_category).toBe(FALLBACK_TOPIC_CATEGORY);
     });
 
-    it('should fallback to L2 when topic_category is not in enum', async () => {
+    it('should fallback to L3_PLUS when topic_category is not in enum', async () => {
       mockCallClaudeJSON.mockResolvedValue({
         risk_level: 'L1',
         topic_category: 'invented_category',
@@ -185,7 +185,7 @@ describe('Risk Engine', () => {
       });
 
       // Should fallback because topic_category is invalid
-      expect(result.risk_level).toBe('L2');
+      expect(result.risk_level).toBe('L3_PLUS');
       expect(result.topic_category).toBe(FALLBACK_TOPIC_CATEGORY);
     });
 
@@ -201,7 +201,7 @@ describe('Risk Engine', () => {
         senderRole: 'USER_A',
       });
 
-      expect(result.risk_level).toBe('L2');
+      expect(result.risk_level).toBe('L3_PLUS');
       expect(result.topic_category).toBe(FALLBACK_TOPIC_CATEGORY);
       expect(result.reasoning).toContain('fallback');
     });
@@ -215,7 +215,7 @@ describe('Risk Engine', () => {
         senderRole: 'USER_A',
       });
 
-      expect(result.risk_level).toBe('L2');
+      expect(result.risk_level).toBe('L3_PLUS');
     });
   });
 

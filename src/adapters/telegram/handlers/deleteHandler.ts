@@ -2,6 +2,7 @@ import { Context, Markup } from 'telegraf';
 import { prisma } from '../../../db/client';
 import { hmacHash } from '../../../utils/encryption';
 import { logger } from '../../../utils/logger';
+import { cleanupSessionState } from './callbackHandler';
 
 /**
  * Handle /delete_my_data command.
@@ -36,6 +37,15 @@ export async function handleDeleteConfirmation(ctx: Context, telegramId: string)
     if (!targetUserId) {
       await ctx.reply('לא נמצאו נתונים למחיקה.');
       return;
+    }
+
+    // Clean up in-memory state for all user's sessions before DB deletion
+    const userSessions = await prisma.coupleSession.findMany({
+      where: { OR: [{ userAId: targetUserId }, { userBId: targetUserId }] },
+      select: { id: true },
+    });
+    for (const session of userSessions) {
+      cleanupSessionState(session.id);
     }
 
     // Wrap all deletions in a transaction to prevent partial deletion on failure

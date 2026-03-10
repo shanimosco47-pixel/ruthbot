@@ -78,7 +78,7 @@ export async function handleVoice(ctx: Context): Promise<void> {
       context: {
         sessionId: session.id,
         anonymizedCoupleId: session.anonymizedCoupleId,
-        userAId: fullSession?.userAId || (session.role === 'USER_A' ? userId : ''),
+        userAId: fullSession?.userAId || userId,
         userBId: fullSession?.userBId || null,
         currentUserId: userId,
         currentRole: session.role,

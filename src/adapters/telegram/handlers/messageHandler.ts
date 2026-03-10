@@ -701,6 +701,7 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
     ? session.closedAt.toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' })
     : new Date().toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  const botUrl = `https://t.me/${env.BOT_USERNAME}`;
   const sent = await sendSessionSummaryEmail({
     to: email,
     userName,
@@ -709,7 +710,8 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
     sharedCommitments: summary.sharedCommitments,
     encouragement: summary.encouragement,
     topicCategory,
-    ctaUrl: `https://t.me/${env.BOT_USERNAME}`,
+    ctaUrl: botUrl,
+    unsubscribeUrl: `${botUrl}?start=unsubscribe`,
   });
 
   if (sent) {

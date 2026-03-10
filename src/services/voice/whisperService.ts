@@ -9,10 +9,12 @@ const openai = new OpenAI({
   apiKey: env.OPENAI_API_KEY,
 });
 
+const WHISPER_RETRY_DELAY_MS = 1000; // 1 second backoff between retries
+
 /**
  * Transcribe a voice note using OpenAI Whisper-1.
  * - Downloads audio from Telegram, transcribes, deletes file immediately.
- * - Max 1 retry (audio files are large, cost & latency are high).
+ * - Max 1 retry with backoff (audio files are large, cost & latency are high).
  * - On failure: returns null (caller should ask user to type instead).
  */
 export async function transcribeVoiceNote(params: {
@@ -46,6 +48,9 @@ export async function transcribeVoiceNote(params: {
       if (attempt === WHISPER_MAX_RETRIES) {
         return null;
       }
+
+      // Backoff before retry
+      await new Promise((resolve) => setTimeout(resolve, WHISPER_RETRY_DELAY_MS * (attempt + 1)));
     }
   }
 

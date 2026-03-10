@@ -51,6 +51,14 @@ export const CLAUDE_MAX_RETRIES = 2;
 export const CLAUDE_INITIAL_RETRY_DELAY_MS = 1000;
 export const WHISPER_MAX_RETRIES = 1;
 
+// Periodic task intervals (milliseconds)
+export const PERIODIC_SESSION_EXPIRY_CHECK_MS = 5 * 60 * 1000;   // 5 minutes
+export const PERIODIC_TOKEN_EXPIRY_CHECK_MS = 60 * 1000;          // 1 minute
+export const PERIODIC_IDLE_PAUSE_CHECK_MS = 5 * 60 * 1000;        // 5 minutes
+export const PERIODIC_CONSENT_TIMEOUT_CHECK_MS = 2 * 60 * 1000;   // 2 minutes
+export const PERIODIC_PAUSE_REMINDER_CHECK_MS = 5 * 60 * 1000;    // 5 minutes
+export const CONSENT_TIMEOUT_MINUTES = 15;
+
 // TTL options in hours
 export const TTL_OPTIONS = [1, 3, 12] as const;
 export type TtlOption = (typeof TTL_OPTIONS)[number];
