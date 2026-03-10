@@ -1,4 +1,13 @@
+import { env } from '../config/env';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
 
 interface LogEntry {
   level: LogLevel;
@@ -15,7 +24,15 @@ function formatLog(entry: LogEntry): string {
   return base;
 }
 
+function shouldLog(level: LogLevel): boolean {
+  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[env.LOG_LEVEL as LogLevel];
+}
+
 function log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
+  if (!shouldLog(level)) {
+    return;
+  }
+
   const entry: LogEntry = {
     level,
     message,
