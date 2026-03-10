@@ -6,6 +6,7 @@ process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
 process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
 process.env.OPENAI_API_KEY = 'test-openai-key';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/couplebot_test';
+process.env.DIRECT_URL = 'postgresql://test:test@localhost:5432/couplebot_test';
 process.env.STRIPE_SECRET_KEY = 'sk_test_fake';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_fake';
 process.env.STRIPE_PRICE_ID = 'price_test_fake';
