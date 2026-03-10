@@ -101,11 +101,13 @@ export async function callClaudeJSON<T>(options: ClaudeCallOptions): Promise<T> 
 
   try {
     return JSON.parse(jsonStr) as T;
-  } catch {
+  } catch (parseError) {
+    // SECURITY: Do not log response content — it may contain user messages (PII)
     logger.error('Failed to parse Claude JSON response', {
-      response: response.substring(0, 500),
+      responseLength: response.length,
       sessionId: options.sessionId,
+      error: parseError instanceof Error ? parseError.message : 'unknown parse error',
     });
-    throw new Error(`Failed to parse Claude JSON response: ${response.substring(0, 200)}`);
+    throw new Error('Failed to parse Claude JSON response');
   }
 }

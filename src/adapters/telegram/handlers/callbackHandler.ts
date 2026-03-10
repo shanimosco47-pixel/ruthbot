@@ -341,7 +341,9 @@ async function showTtlSelection(ctx: Context, sessionId: string): Promise<void> 
 // ============================================
 
 async function handleConsentAccept(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const sessionId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const sessionId = parts[1];
 
   // Validate session is still in PENDING_PARTNER_CONSENT before proceeding
   const currentSession = await prisma.coupleSession.findUnique({
@@ -392,8 +394,14 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
   if (latestReframe?.reframedContent) {
     try {
       reframedText = decrypt(latestReframe.reframedContent);
-    } catch {
-      reframedText = latestReframe.reframedContent;
+    } catch (decryptError) {
+      logger.error('Failed to decrypt reframed content for User B delivery', {
+        sessionId,
+        messageId: latestReframe.id,
+        error: decryptError instanceof Error ? decryptError.message : String(decryptError),
+      });
+      // SECURITY: Never return encrypted hex data to the user
+      reframedText = '';
     }
 
     // Deliver the reframe FIRST, then mark as delivered (Section 2.5, Phase 3, 3A)
@@ -436,7 +444,9 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 // ============================================
 
 async function handleReframeApprove(ctx: Context, _telegramId: string, data: string): Promise<void> {
-  const messageId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const messageId = parts[1];
   const pending = pendingReframes.get(messageId);
 
   if (!pending) {
@@ -469,7 +479,9 @@ async function handleReframeApprove(ctx: Context, _telegramId: string, data: str
 }
 
 async function handleReframeEdit(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const messageId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const messageId = parts[1];
   const pending = pendingReframes.get(messageId);
 
   if (!pending) {
@@ -498,7 +510,9 @@ async function handleReframeEdit(ctx: Context, telegramId: string, data: string)
 }
 
 async function handleReframeCancel(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const messageId = data.split(':')[1];
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const messageId = parts[1];
   pendingReframes.delete(messageId);
 
   await ctx.reply('ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.');
@@ -605,7 +619,8 @@ async function handleInviteDraftChoice(ctx: Context, telegramId: string, data: s
 // ============================================
 
 async function handleEmailOptChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const choice = parts[1]; // 'yes' or 'no'
 
   if (choice === 'yes') {
@@ -622,7 +637,9 @@ async function handleEmailOptChoice(ctx: Context, telegramId: string, data: stri
 // ============================================
 
 async function handleDeleteConfirm(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const choice = data.split(':')[1]; // 'yes' or 'no'
+  const parts = parseCallbackData(data, 2);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
+  const choice = parts[1]; // 'yes' or 'no'
 
   if (choice === 'yes') {
     // Actual deletion handled by deleteHandler

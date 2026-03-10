@@ -122,7 +122,7 @@ async function handleCheckoutCompleted(event: Stripe.Event): Promise<void> {
   const customerId = session.customer as string;
   const userId = session.metadata?.userId;
 
-  logger.info('Checkout session completed', { customerId, userId });
+  logger.info('Checkout session completed', { stripeCustomerIdHash: customerId ? hmacHash(customerId) : 'none', userId });
 
   // Link Stripe customer to user if not already linked
   if (userId && customerId) {
@@ -162,7 +162,7 @@ async function handlePaymentActionRequired(event: Stripe.Event): Promise<void> {
   const customerId = invoice.customer as string;
   const hostedUrl = invoice.hosted_invoice_url;
 
-  logger.warn('Payment action required (3D Secure)', { customerId });
+  logger.warn('Payment action required (3D Secure)', { stripeCustomerIdHash: hmacHash(customerId) });
 
   const message = hostedUrl
     ? `⚠️ התשלום שלך דורש אימות נוסף (3D Secure).\n\nלחץ/י על הקישור כדי להשלים את האימות:`
@@ -199,7 +199,7 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
 
-  logger.info('Payment succeeded', { customerId });
+  logger.info('Payment succeeded', { stripeCustomerIdHash: hmacHash(customerId) });
 
   // Find sessions with this billing owner
   const sessions = await findSessionsByStripeCustomer(customerId);
@@ -234,7 +234,7 @@ async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
   const customerId = invoice.customer as string;
 
-  logger.warn('Payment failed', { customerId });
+  logger.warn('Payment failed', { stripeCustomerIdHash: hmacHash(customerId) });
 
   // Find active sessions for this customer
   const sessions = await findSessionsByStripeCustomer(customerId);
@@ -259,7 +259,7 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
   const subscription = event.data.object as Stripe.Subscription;
   const customerId = subscription.customer as string;
 
-  logger.info('Subscription deleted', { customerId });
+  logger.info('Subscription deleted', { stripeCustomerIdHash: hmacHash(customerId) });
 
   // Move all active sessions to LOCKED (read-only)
   const sessions = await findSessionsByStripeCustomer(customerId);
@@ -300,7 +300,7 @@ async function findSessionsByStripeCustomer(customerId: string): Promise<
   });
 
   if (!user) {
-    logger.warn('No user found for Stripe customer', { customerId });
+    logger.warn('No user found for Stripe customer', { stripeCustomerIdHash: hash });
     return [];
   }
 
