@@ -6,7 +6,7 @@ import { logger } from '../../../utils/logger';
 import { detectLanguage, splitMessage } from '../../../utils/telegramHelpers';
 import { encrypt } from '../../../utils/encryption';
 import { TELEGRAM_MAX_VOICE_SIZE_MB } from '../../../config/constants';
-import { pendingReframes } from './callbackHandler';
+import { setPendingReframe } from '../../../utils/stateStore';
 import { Markup } from 'telegraf';
 import { prisma } from '../../../db/client';
 import type { PendingReframe } from '../../../types';
@@ -119,7 +119,7 @@ export async function handleVoice(ctx: Context): Promise<void> {
         messageId: message.id,
       };
 
-      pendingReframes.set(message.id, pending);
+      await setPendingReframe(message.id, pending);
 
       await ctx.reply(
         `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`,

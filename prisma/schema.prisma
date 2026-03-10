@@ -169,6 +169,36 @@ model StripeEvent {
 }
 
 // ============================================
+// FLOW STATE — Persisted in-memory state
+// ============================================
+
+model PendingReframeState {
+  messageId       String     @id @map("message_id") // same as Message.id
+  sessionId       String     @map("session_id")
+  senderRole      SenderRole @map("sender_role")
+  ownerTelegramId String     @map("owner_telegram_id") // plain text (short-lived operational state)
+  reframedText    String     @map("reframed_text") // encrypted
+  originalText    String     @map("original_text") // encrypted
+  editIterations  Int        @default(0) @map("edit_iterations")
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@index([ownerTelegramId])
+  @@map("pending_reframe_states")
+}
+
+model UserFlowState {
+  telegramId String   @id @map("telegram_id") // plain text (short-lived operational state)
+  state      String
+  sessionId  String?  @map("session_id")
+  data       Json?    // arbitrary JSON payload
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([sessionId])
+  @@map("user_flow_states")
+}
+
+// ============================================
 // ENUMS
 // ============================================
 

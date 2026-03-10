@@ -4,7 +4,8 @@ import { logger } from '../../utils/logger';
 import { handleStart } from './handlers/startHandler';
 import { handleMessage } from './handlers/messageHandler';
 import { handleVoice } from './handlers/voiceHandler';
-import { handleCallbackQuery, userStates, cleanupSessionState } from './handlers/callbackHandler';
+import { handleCallbackQuery, cleanupSessionState } from './handlers/callbackHandler';
+import { deleteUserState } from '../../utils/stateStore';
 import { handleDeleteMyData } from './handlers/deleteHandler';
 import { withSessionLock } from '../../utils/sessionLock';
 import { SessionManager } from '../../core/stateMachine/sessionManager';
@@ -85,9 +86,9 @@ export function createBot(): Telegraf {
         await ctx.reply('לא ניתן לסגור את הסשן במצבו הנוכחי.');
       }
 
-      // Clean up all in-memory state for this session and user
-      cleanupSessionState(activeSession.id);
-      userStates.delete(telegramId);
+      // Clean up all DB-persisted state for this session and user
+      await cleanupSessionState(activeSession.id);
+      await deleteUserState(telegramId);
     });
   });
 
