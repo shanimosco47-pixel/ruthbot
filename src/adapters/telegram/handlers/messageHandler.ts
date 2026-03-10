@@ -35,8 +35,16 @@ export async function handleMessage(ctx: Context): Promise<void> {
     return;
   }
 
-  // Get user state
-  const state = await getUserState(telegramId);
+  // Get user state (graceful fallback if DB table missing or query fails)
+  let state: UserFlowState | null = null;
+  try {
+    state = await getUserState(telegramId);
+  } catch (error) {
+    logger.warn('getUserState failed, falling back to session-based routing', {
+      telegramId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   if (state) {
     switch (state.state) {
@@ -493,20 +501,20 @@ async function handleCoachingMessage(
 ): Promise<void> {
   await ctx.sendChatAction('typing');
 
-  const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
-  const session = await SessionManager.getActiveSession(userId);
-
-  if (!session) {
-    await ctx.reply('אין סשן פתוח. הקלד/י /start להתחיל.');
-    return;
-  }
-
-  const language = detectLanguage(text);
-
-  // Fetch full session for correct userAId/userBId
-  const fullSession = await SessionManager.getSession(sessionId);
-
   try {
+    const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
+    const session = await SessionManager.getActiveSession(userId);
+
+    if (!session) {
+      await ctx.reply('אין סשן פתוח. הקלד/י /start להתחיל.');
+      return;
+    }
+
+    const language = detectLanguage(text);
+
+    // Fetch full session for correct userAId/userBId
+    const fullSession = await SessionManager.getSession(sessionId);
+
     const result = await processMessage({
       context: {
         sessionId,

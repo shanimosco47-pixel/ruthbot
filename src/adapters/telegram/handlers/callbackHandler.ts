@@ -100,6 +100,33 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
 
 async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise<void> {
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
+
+  // Guard: prevent double-click creating duplicate sessions
+  const existingSession = await SessionManager.getActiveSession(userId);
+  if (existingSession) {
+    logger.info('Disclaimer accept: user already has active session, reusing', {
+      telegramId,
+      sessionId: existingSession.id,
+      status: existingSession.status,
+    });
+
+    // If already past onboarding, just acknowledge
+    if (existingSession.status !== 'INVITE_CRAFTING') {
+      await ctx.reply('כבר יש לך סשן פתוח. אפשר להמשיך לכתוב.');
+      return;
+    }
+
+    // Still in INVITE_CRAFTING — re-show the onboarding choice
+    await ctx.reply(
+      'רוצה לעבד לבד קודם, או להזמין את בן/בת הזוג? אני אגשר ביניכם.',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('🤝 להזמין עכשיו', `onboard_choice:invite:${existingSession.id}`)],
+        [Markup.button.callback('🧘 לעבד לבד קודם', `onboard_choice:solo:${existingSession.id}`)],
+      ])
+    );
+    return;
+  }
+
   const sessionId = await SessionManager.createSession(userId);
 
   logger.info('Disclaimer accepted, session created', { telegramId, sessionId });
@@ -130,7 +157,24 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
   const choice = parts[1]; // 'invite' or 'solo'
   const sessionId = parts[2];
 
+  // Guard: verify session exists and check current state
+  let currentStatus: string;
+  try {
+    currentStatus = await SessionStateMachine.getStatus(sessionId);
+  } catch {
+    logger.warn('Onboarding choice for non-existent session', { sessionId, choice });
+    await ctx.reply('הסשן לא נמצא. הקלד/י /start כדי להתחיל מחדש.');
+    return;
+  }
+
   if (choice === 'solo') {
+    // If already transitioned (e.g., double-click), just set state and acknowledge
+    if (currentStatus === 'ASYNC_COACHING') {
+      logger.info('Onboarding: session already ASYNC_COACHING, skipping transition', { sessionId });
+      await setUserState(telegramId, { state: 'coaching', sessionId });
+      return;
+    }
+
     // Transition to ASYNC_COACHING
     await SessionStateMachine.transition(sessionId, 'ASYNC_COACHING', { reason: 'user_chose_solo' });
 
