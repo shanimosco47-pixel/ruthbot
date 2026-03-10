@@ -17,13 +17,20 @@ export function createBot(): Telegraf {
 
   // Error handler — log and give user feedback
   bot.catch(async (err, ctx) => {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error('Bot error', {
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMsg,
+      stack: err instanceof Error ? err.stack : undefined,
       updateType: ctx.updateType,
       chatId: ctx.chat?.id,
     });
 
     try {
+      // Double-click / stale button: harmless, give friendly feedback
+      if (errorMsg.includes('Invalid state transition') || errorMsg.includes('State transition conflict')) {
+        await ctx.reply('הפעולה כבר בוצעה. אפשר להמשיך.');
+        return;
+      }
       await ctx.reply('אירעה שגיאה. נסה/י שוב בעוד רגע.');
     } catch {
       // If we can't even reply, just log
