@@ -85,11 +85,21 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
       logger.warn('Unknown callback query', { data, telegramId });
     }
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error('Callback handler error', {
       data,
       telegramId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMsg,
+      stack: error instanceof Error ? error.stack : undefined,
     });
+
+    // Double-click / stale button detection: invalid state transitions are harmless
+    if (errorMsg.includes('Invalid state transition') || errorMsg.includes('State transition conflict')) {
+      logger.info('Ignoring double-click state transition error', { data, telegramId });
+      await ctx.reply('הפעולה כבר בוצעה. אפשר להמשיך.');
+      return;
+    }
+
     await ctx.reply('אירעה שגיאה. נסה/י שוב.');
   }
 }
@@ -169,9 +179,12 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
 
   if (choice === 'solo') {
     // If already transitioned (e.g., double-click), just set state and acknowledge
-    if (currentStatus === 'ASYNC_COACHING') {
-      logger.info('Onboarding: session already ASYNC_COACHING, skipping transition', { sessionId });
+    if (currentStatus !== 'INVITE_CRAFTING') {
+      logger.info('Onboarding solo: session not in INVITE_CRAFTING, skipping transition', {
+        sessionId, currentStatus,
+      });
       await setUserState(telegramId, { state: 'coaching', sessionId });
+      await ctx.reply('כבר בוצע. אפשר להמשיך לכתוב.');
       return;
     }
 
@@ -189,6 +202,15 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
 
     await setUserState(telegramId, { state: 'coaching', sessionId });
   } else {
+    // If already transitioned (e.g., double-click), skip
+    if (currentStatus !== 'INVITE_CRAFTING') {
+      logger.info('Onboarding invite: session not in INVITE_CRAFTING, skipping', {
+        sessionId, currentStatus,
+      });
+      await ctx.reply('כבר בוצע. אפשר להמשיך.');
+      return;
+    }
+
     // Start invitation flow (1B)
     await ctx.reply(
       'מה הדבר הכי חשוב שאתה רוצה שהם ידעו לפני שנכנסים?'
@@ -330,6 +352,22 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const sessionId = parts[1];
+
+  // Guard: prevent double-click — check if session already moved past PENDING_PARTNER_CONSENT
+  try {
+    const currentStatus = await SessionStateMachine.getStatus(sessionId);
+    if (currentStatus !== 'PENDING_PARTNER_CONSENT') {
+      logger.info('Consent accept: session already past PENDING_PARTNER_CONSENT, ignoring double-click', {
+        telegramId, sessionId, currentStatus,
+      });
+      await ctx.reply('כבר קיבלנו את ההסכמה שלך. אפשר להמשיך.');
+      return;
+    }
+  } catch {
+    logger.warn('Consent accept: session not found', { sessionId });
+    await ctx.reply('הסשן לא נמצא. הקלד/י /start כדי להתחיל.');
+    return;
+  }
 
   // NOW we can store User B's data (GDPR: only after consent)
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
