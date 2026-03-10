@@ -2,8 +2,8 @@ import crypto from 'crypto';
 import { env } from '../config/env';
 
 // AES-256-GCM: Authenticated encryption (AEAD) — provides integrity + confidentiality
-const ALGORITHM_GCM = 'aes-256-gcm';
-const GCM_IV_LENGTH = 12; // NIST recommended IV length for GCM
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // NIST recommended IV length for GCM
 const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag
 
 // Legacy CBC support for decrypting old data (pre-migration)
@@ -15,20 +15,38 @@ function getKey(): Buffer {
 
 export function encrypt(text: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv) as crypto.CipherGCM;
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   const authTag = cipher.getAuthTag().toString('hex');
-  // Format: iv:encrypted:authTag (3 parts = GCM)
-  return `${iv.toString('hex')}:${encrypted}:${authTag}`;
+  // Format: gcm:iv:authTag:ciphertext (prefix distinguishes from legacy CBC format)
+  return `gcm:${iv.toString('hex')}:${authTag}:${encrypted}`;
 }
 
 export function decrypt(encryptedText: string): string {
-  const parts = encryptedText.split(':');
+  if (encryptedText.startsWith('gcm:')) {
+    // GCM format: gcm:iv:authTag:ciphertext
+    const parts = encryptedText.split(':');
+    if (parts.length < 4) {
+      throw new Error('Invalid GCM encrypted text format');
+    }
+    const [, ivHex, authTagHex, ...encryptedParts] = parts;
+    const encrypted = encryptedParts.join(':');
+    if (!ivHex || !authTagHex) {
+      throw new Error('Invalid GCM encrypted text format');
+    }
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
 
-  if (parts.length === 3) {
-    // GCM format: iv:encrypted:authTag
-    const [ivHex, encrypted, authTagHex] = parts;
+  if (encryptedText.split(':').length === 3) {
+    // Legacy GCM format: iv:encrypted:authTag (no prefix)
+    const [ivHex, encrypted, authTagHex] = encryptedText.split(':');
     if (!ivHex || encrypted === undefined || !authTagHex) {
       throw new Error('Invalid encrypted text format');
     }

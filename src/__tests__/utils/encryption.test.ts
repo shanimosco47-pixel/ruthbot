@@ -59,10 +59,11 @@ describe('Encryption Utils', () => {
       expect(decrypt(encrypted2)).toBe(original);
     });
 
-    it('should produce ciphertext in iv:data:authTag GCM format', () => {
+    it('should produce ciphertext in gcm:iv:authTag:data format', () => {
       const encrypted = encrypt('test');
-      expect(encrypted).toMatch(/^[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
-      const [ivHex, , authTagHex] = encrypted.split(':');
+      expect(encrypted).toMatch(/^gcm:[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
+      const [prefix, ivHex, authTagHex] = encrypted.split(':');
+      expect(prefix).toBe('gcm');
       // IV should be 12 bytes = 24 hex chars (GCM standard)
       expect(ivHex.length).toBe(24);
       // Auth tag should be 16 bytes = 32 hex chars
