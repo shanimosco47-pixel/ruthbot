@@ -75,9 +75,8 @@ model CoupleSession {
 
   @@index([status, updatedAt])
   @@index([status, inviteTokenExpiresAt, inviteTokenUsed])
-  @@index([userAId])
-  @@index([userBId])
-  @@index([anonymizedCoupleId])
+  @@index([userAId, status])
+  @@index([userBId, status])
   @@map("couple_sessions")
 }
 

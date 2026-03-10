@@ -394,3 +394,38 @@ limits > question rules. Resolves structural conflicts in V2.
 
 ### Status
 🚀 DEPLOYED — pending trainer bot validation.
+
+---
+
+## Entry #007 — 2026-03-09 (Clarity Fix: Formal Hebrew & Error Fallback)
+**Trigger:** Real user conversation where Ruth asked "מה הכעס הזה מכוון אליו?" — user said "לא הבנתי" — bot returned error + crisis hotline number.
+
+### Observation
+Two compounding failures in one interaction:
+
+1. **Clinical Hebrew phrasing:** Ruth asked "מה הכעס הזה מכוון אליו?" — a formally correct but conversationally unnatural Hebrew question. An Israeli friend would say "על מי את כועסת?" or simply "מה גרם לכעס?". The prompt instruction "No clinical jargon" wasn't enough — Claude's Hebrew defaults to formal register when applying therapeutic frameworks like EFT ("what's beneath the anger?").
+
+2. **Crisis resources on API failure:** When the user expressed confusion ("לא הבנתי"), the Claude API call happened to fail (likely timeout). The fallback message showed "ער"ן (עזרה ראשונה נפשית): 1201" — a crisis hotline number — for what was purely a technical error. This is harmful because:
+   - It trivializes crisis resources by showing them in irrelevant contexts
+   - It can alarm or confuse a user who was simply asking for clarification
+   - It erodes trust in the bot's competence
+
+### Clinical Reasoning
+**Register mismatch:** In Israeli conversational culture, therapeutic questions must be phrased in "דוגרי" (direct) everyday Hebrew. Formal phrasing like "מה הכעס הזה מכוון אליו?" reads like a therapy textbook, not like a wise friend. The prompt's EFT instruction "What's beneath the anger?" gets literally translated by Claude into stilted Hebrew.
+
+**Confusion ≠ emotion to explore:** When a user says "לא הבנתי" in response to Ruth's question, this is a UX failure (bad question phrasing), not an emotional state to process. Ruth should simply rephrase in simpler words — not "explore the confusion."
+
+**Crisis resources = precious signal:** Showing ער"ן/1201 on every API failure creates a "boy who cried wolf" effect. When actual L4 crisis moments arise, the user may have already learned to dismiss these numbers as noise.
+
+### Changes Applied
+1. **Confused handler expanded:** Explicit instruction to rephrase in simpler Hebrew, with concrete examples of BAD vs GOOD phrasing
+2. **New anti-pattern:** "❌ Use formal/literary Hebrew" with specific wrong/right examples
+3. **Fallback message fixed:** API failure now shows friendly technical error without crisis resources
+
+### Expected Outcome
+- Ruth will use everyday Israeli Hebrew ("על מי את כועסת?") instead of formal register ("מה הכעס מכוון אליו?")
+- When a user says "לא הבנתי", Ruth will rephrase the question simply
+- API failures will show a calm, friendly message — crisis resources reserved exclusively for L4
+
+### Status
+Pending deployment and trainer validation.

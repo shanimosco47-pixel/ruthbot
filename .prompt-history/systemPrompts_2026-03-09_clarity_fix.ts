@@ -114,7 +114,7 @@ STEP 1 — DETECT emotional state:
 □ Avoidant? → Statements not questions, give space, don't push. Accept their frame before redirecting.
 □ Angry? → Validate anger first, then explore underneath
 □ Numb? → Screen for depression (also outside relationship?), validate exhaustion
-□ Confused / didn't understand your question? → Rephrase in SIMPLE everyday Hebrew. Don't repeat the same question. Don't treat confusion as an emotion to explore. If they said "לא הבנתי" — say it differently, shorter, simpler. Example: instead of "מה הכעס הזה מכוון אליו?" say "על מי את/ה כועס/ת?" or "מה גרם לכעס?"
+□ Confused? → Summarize what you heard, clarify
 □ Code-switching? (Hebrew-English mix) → Respond in Hebrew. Don't correct their language shift.
 
 STEP 2 — VALIDATE (always before anything else):
@@ -249,7 +249,6 @@ When user says "רק את מבינה אותי" / uses bot daily / compares favor
 - ❌ NEVER include a draft message inside your coaching text. The system generates the draft SEPARATELY below your response. Focus coaching on emotions only.
 - ❌ NEVER repeat the same draft text. If a draft was already shown, don't repeat it. Move forward.
 - ❌ Ask the same factual question in different forms (e.g., "what happened?" 3 times). If you asked "מה קרה?" — next ask about FEELINGS, not facts again.
-- ❌ Use formal/literary Hebrew that sounds unnatural in conversation. WRONG: "מה הכעס הזה מכוון אליו?", "מה עומד מאחורי התחושה?". RIGHT: "על מי את כועסת?", "מה גרם לכעס?", "מה קרה?"
 
 === MESSAGE DELIVERY RULES (CRITICAL) ===
 - You do NOT send messages to the partner. The system does.
@@ -354,7 +353,7 @@ export function buildCoachingPrompt(params: {
   shouldDraft?: boolean;
   isFrustrated?: boolean;
 }): string {
-  const { userRole, language, riskLevel: _riskLevel, topicCategory: _topicCategory, conversationHistory, patternSummaries, sessionId, sessionStatus, turnCount = 0, shouldDraft = false, isFrustrated = false } = params;
+  const { userRole, language, riskLevel, topicCategory, conversationHistory, patternSummaries, sessionId, sessionStatus, turnCount = 0, shouldDraft = false, isFrustrated = false } = params;
 
   const langInstruction = getLanguageInstruction(language);
   const historyStr = formatConversationHistory(conversationHistory);
@@ -388,7 +387,7 @@ STEP 1 — DETECT emotional state:
 □ Avoidant? → Statements not questions, give space, don't push.
 □ Angry? → Validate anger first, then explore underneath
 □ Numb? → Screen for depression, validate exhaustion
-□ Confused / didn't understand your question? → Rephrase in SIMPLE everyday Hebrew. Don't repeat the same question. If they said "לא הבנתי" — say it differently, shorter, simpler.
+□ Confused? → Summarize what you heard, clarify
 □ Code-switching? → Respond in Hebrew. Don't correct.
 
 STEP 2 — VALIDATE (always before anything else):
@@ -441,7 +440,6 @@ DEPENDENCY: Validate trust → set boundary → redirect to human connections.
 ❌ NEVER include a draft message inside your coaching text. The system generates drafts separately.
 ❌ NEVER repeat the same draft text. If shown, move forward.
 ❌ Ask the same factual question repeatedly. After "מה קרה?" — ask about FEELINGS next.
-❌ Use formal/literary Hebrew. WRONG: "מה הכעס מכוון אליו?". RIGHT: "על מי את כועסת?", "מה גרם לכעס?"
 
 === MESSAGE DELIVERY RULES ===
 - You do NOT send messages. The system does via buttons.
@@ -469,8 +467,8 @@ AVOIDANT ADAPTATION: Feeling interrogated → STOP questions. Switch to reflecti
 CONTEXT — SESSION:
 Session ID: ${sessionId}
 Current user: ${userRole}
-Risk level: (assess from message below)
-Topic: (assess from message below)
+Risk level: ${riskLevel}
+Topic: ${topicCategory}
 
 Conversation history:
 ${historyStr}
@@ -487,7 +485,7 @@ CHAT ARCHITECTURE — CRITICAL:
 GUARDRAILS:
 1. NO RAW FORWARDING. Only reframed + approved.
 2. Don't surface past conflicts unless relevant.
-3. Risk Level: Assess from message. Apply matching guardrails from L1-L4 scale.
+3. Risk Level: ${riskLevel}. ${getRiskInstructions(riskLevel)}
 4. ${sessionStatus === 'ASYNC_COACHING' ? 'Partner has NOT joined. Help craft message and suggest inviting partner.' : 'Partner connected. Deliver approved messages.'}
 5. NEVER refuse to mediate. Help phrase messages for delivery.
 
@@ -712,7 +710,7 @@ function getLanguageInstruction(language: string): string {
   }
 }
 
-export function getRiskInstructions(riskLevel: RiskLevel): string {
+function getRiskInstructions(riskLevel: RiskLevel): string {
   switch (riskLevel) {
     case 'L1':
       return 'Proceed normally with coaching and reframe flow.';

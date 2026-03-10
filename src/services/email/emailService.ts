@@ -5,7 +5,11 @@ import { CATEGORY_RESOURCES } from '../../config/constants';
 import type { SessionSummaryEmail } from '../../types';
 
 const PLACEHOLDER_KEYS = ['re_test_fake', 'placeholder', 'your_resend_api_key'];
-const isEmailConfigured = !PLACEHOLDER_KEYS.includes(env.EMAIL_API_KEY);
+
+function isEmailConfigured(): boolean {
+  return !PLACEHOLDER_KEYS.includes(env.EMAIL_API_KEY);
+}
+
 const resend = new Resend(env.EMAIL_API_KEY);
 
 /**
@@ -14,7 +18,7 @@ const resend = new Resend(env.EMAIL_API_KEY);
  * HTML template: single file, inline CSS, RTL layout.
  */
 export async function sendSessionSummaryEmail(params: SessionSummaryEmail): Promise<boolean> {
-  if (!isEmailConfigured) {
+  if (!isEmailConfigured()) {
     logger.warn('Email service not configured — skipping email send. Set EMAIL_API_KEY in .env');
     return false;
   }

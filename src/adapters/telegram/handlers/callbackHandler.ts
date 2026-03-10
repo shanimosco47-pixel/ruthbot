@@ -207,7 +207,6 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const ttlValue = parseInt(parts[1], 10);
   if (![1, 3, 12].includes(ttlValue)) {
-    logger.warn('Invalid TTL value in callback', { data, ttlValue });
     await ctx.reply('אירעה שגיאה. נסה/י שוב.');
     return;
   }
@@ -333,8 +332,7 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 
   // NOW we can store User B's data (GDPR: only after consent)
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
-
-  // recordPartnerConsent stores User B data AND transitions to REFLECTION_GATE
+  // recordPartnerConsent already transitions to REFLECTION_GATE internally
   await SessionManager.recordPartnerConsent(sessionId, userId);
 
   // Get the reframed message to show User B
@@ -410,11 +408,11 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 // Reframe Approval Flow (Rule 2)
 // ============================================
 
-async function handleReframeApprove(ctx: Context, telegramId: string, data: string): Promise<void> {
+async function handleReframeApprove(ctx: Context, _telegramId: string, data: string): Promise<void> {
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
-  const pending = await getPendingReframe(messageId);
+  const pending = pendingReframes.get(messageId);
 
   if (!pending) {
     await ctx.reply('ההודעה כבר לא זמינה.');
@@ -456,7 +454,7 @@ async function handleReframeEdit(ctx: Context, telegramId: string, data: string)
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
-  const pending = await getPendingReframe(messageId);
+  const pending = pendingReframes.get(messageId);
 
   if (!pending) {
     await ctx.reply('ההודעה כבר לא זמינה.');
@@ -494,16 +492,7 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
-  const pending = await getPendingReframe(messageId);
-
-  // Authorization: only the owner can cancel
-  if (pending && pending.ownerTelegramId !== telegramId) {
-    logger.warn('Unauthorized reframe cancel attempt', { telegramId, messageId });
-    await ctx.reply('אין הרשאה לפעולה זו.');
-    return;
-  }
-
-  await deletePendingReframe(messageId);
+  pendingReframes.delete(messageId);
 
   await ctx.reply('ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.');
 
@@ -699,12 +688,8 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
 // ============================================
 
 async function handleFrustrationChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
-  const parts = data.split(':');
-  if (parts.length < 3) {
-    logger.warn('Malformed frustration callback data', { data, telegramId });
-    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
-    return;
-  }
+  const parts = parseCallbackData(data, 3);
+  if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const templateType = parts[1] as MessageTemplate; // 'apology', 'boundary', 'future_rule'
   const sessionId = parts[2];
 
