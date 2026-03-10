@@ -58,7 +58,13 @@ async function main(): Promise<void> {
       const body = await readBody(req, res);
       if (body === null) return;
       try {
-        const signature = req.headers['stripe-signature'] as string;
+        const signature = req.headers['stripe-signature'];
+        if (!signature || typeof signature !== 'string') {
+          logger.warn('Stripe webhook called without signature header');
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing stripe-signature header' }));
+          return;
+        }
         await handleStripeWebhook(body, signature);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ received: true }));

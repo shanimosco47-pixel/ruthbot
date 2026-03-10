@@ -12,7 +12,29 @@ import { prisma } from '../../../db/client';
 import { MAX_EDIT_ITERATIONS } from '../../../config/constants';
 import { getMessageTemplate } from '../../../utils/responseValidator';
 import type { MessageTemplate } from '../../../utils/responseValidator';
+import { hmacHash } from '../../../utils/encryption';
 import type { PendingReframe } from '../../../types';
+
+/**
+ * Verify that a Telegram user belongs to the given session (as User A or User B).
+ * Prevents session ID tampering via crafted callback data.
+ */
+async function verifyUserBelongsToSession(telegramId: string, sessionId: string): Promise<boolean> {
+  const hash = hmacHash(telegramId);
+  const user = await prisma.user.findUnique({
+    where: { telegramIdHash: hash },
+    select: { id: true },
+  });
+  if (!user) return false;
+
+  const session = await prisma.coupleSession.findUnique({
+    where: { id: sessionId },
+    select: { userAId: true, userBId: true },
+  });
+  if (!session) return false;
+
+  return session.userAId === user.id || session.userBId === user.id;
+}
 
 // TODO: [PERF REVIEW NEEDED] In-memory state is lost on server restart (Render free tier restarts on deploy and idle).
 // Pending reframes and user states should be persisted to DB for production resilience.
@@ -149,6 +171,12 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
   const choice = parts[1]; // 'invite' or 'solo'
   const sessionId = parts[2];
 
+  if (!await verifyUserBelongsToSession(telegramId, sessionId)) {
+    logger.warn('Unauthorized session access attempt', { telegramId, sessionId, action: 'onboard_choice' });
+    await ctx.reply('אין לך גישה לסשן הזה.');
+    return;
+  }
+
   if (choice === 'solo') {
     // Transition to ASYNC_COACHING
     await SessionStateMachine.transition(sessionId, 'ASYNC_COACHING', { reason: 'user_chose_solo' });
@@ -180,8 +208,21 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
 async function handleTtlChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
   const parts = parseCallbackData(data, 3);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
-  const ttlHours = parseInt(parts[1], 10) as 1 | 3 | 12;
+
   const sessionId = parts[2];
+  if (!await verifyUserBelongsToSession(telegramId, sessionId)) {
+    logger.warn('Unauthorized session access attempt', { telegramId, sessionId, action: 'ttl_choice' });
+    await ctx.reply('אין לך גישה לסשן הזה.');
+    return;
+  }
+
+  const parsedTtl = parseInt(parts[1], 10);
+  if (![1, 3, 12].includes(parsedTtl)) {
+    logger.warn('Invalid TTL value in callback data', { data, parsedTtl, telegramId });
+    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+    return;
+  }
+  const ttlHours = parsedTtl as 1 | 3 | 12;
 
   const state = userStates.get(telegramId);
   if (!state || !state.sessionId) return;
@@ -241,6 +282,12 @@ async function handleTelegramCheck(ctx: Context, telegramId: string, data: strin
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const answer = parts[1]; // 'yes', 'unsure', 'no'
   const sessionId = parts[2];
+
+  if (!await verifyUserBelongsToSession(telegramId, sessionId)) {
+    logger.warn('Unauthorized session access attempt', { telegramId, sessionId, action: 'telegram_check' });
+    await ctx.reply('אין לך גישה לסשן הזה.');
+    return;
+  }
 
   const hasTelegram = answer === 'yes' ? true : answer === 'no' ? false : null;
   const variant = answer === 'yes' ? 'standard' : 'no_telegram';
@@ -472,6 +519,12 @@ async function handlePartnerDeclinedChoice(ctx: Context, telegramId: string, dat
   const choice = parts[1]; // 'reminder', 'solo', 'close'
   const sessionId = parts[2];
 
+  if (!await verifyUserBelongsToSession(telegramId, sessionId)) {
+    logger.warn('Unauthorized session access attempt', { telegramId, sessionId, action: 'partner_declined' });
+    await ctx.reply('אין לך גישה לסשן הזה.');
+    return;
+  }
+
   if (choice === 'reminder') {
     // Generate soft reminder text
     const reminderText = await callClaude({
@@ -504,6 +557,12 @@ async function handleInviteDraftChoice(ctx: Context, telegramId: string, data: s
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const choice = parts[1]; // 'v1', 'v2', 'regenerate'
   const sessionId = parts[2];
+
+  if (!await verifyUserBelongsToSession(telegramId, sessionId)) {
+    logger.warn('Unauthorized session access attempt', { telegramId, sessionId, action: 'invite_draft' });
+    await ctx.reply('אין לך גישה לסשן הזה.');
+    return;
+  }
 
   if (choice === 'regenerate') {
     await ctx.reply('נסח/י שוב — מה הדבר הכי חשוב שתרצה שידעו?');
@@ -650,10 +709,23 @@ async function handleFrustrationChoice(ctx: Context, telegramId: string, data: s
     await ctx.reply('אירעה שגיאה. נסה/י שוב.');
     return;
   }
-  const templateType = parts[1] as MessageTemplate; // 'apology', 'boundary', 'future_rule'
+  const VALID_TEMPLATES: MessageTemplate[] = ['apology', 'boundary', 'future_rule'];
+  const templateType = parts[1];
+  if (!VALID_TEMPLATES.includes(templateType as MessageTemplate)) {
+    logger.warn('Invalid frustration template type', { data, templateType, telegramId });
+    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+    return;
+  }
+  const validatedTemplate = templateType as MessageTemplate;
   const sessionId = parts[2];
 
-  const template = getMessageTemplate(templateType);
+  if (!await verifyUserBelongsToSession(telegramId, sessionId)) {
+    logger.warn('Unauthorized session access attempt', { telegramId, sessionId, action: 'frustration' });
+    await ctx.reply('אין לך גישה לסשן הזה.');
+    return;
+  }
+
+  const template = getMessageTemplate(validatedTemplate);
 
   // Create a proper REFRAME message in DB so it goes through the standard delivery flow
   const message = await prisma.message.create({
@@ -662,7 +734,7 @@ async function handleFrustrationChoice(ctx: Context, telegramId: string, data: s
       senderRole: 'USER_A', // Frustration templates are always from User A
       messageType: 'REFRAME',
       reframedContent: encrypt(template),
-      rawContent: encrypt(`[frustration template: ${templateType}]`),
+      rawContent: encrypt(`[frustration template: ${validatedTemplate}]`),
     },
   });
 
@@ -670,7 +742,7 @@ async function handleFrustrationChoice(ctx: Context, telegramId: string, data: s
     sessionId,
     senderRole: 'USER_A',
     reframedText: template,
-    originalText: `[frustration template: ${templateType}]`,
+    originalText: `[frustration template: ${validatedTemplate}]`,
     editIterations: 0,
     messageId: message.id,
   };

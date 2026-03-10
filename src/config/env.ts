@@ -67,7 +67,17 @@ function validateEnv(): Env {
     );
   }
 
-  return result.data;
+  const validated = result.data;
+
+  // Security: TELEGRAM_WEBHOOK_SECRET is critical in production to prevent
+  // unauthorized webhook calls. Fail hard if missing in production.
+  if (validated.NODE_ENV === 'production' && !validated.TELEGRAM_WEBHOOK_SECRET) {
+    throw new Error(
+      '❌ TELEGRAM_WEBHOOK_SECRET is required in production to prevent unauthorized webhook requests.'
+    );
+  }
+
+  return validated;
 }
 
 export const env = validateEnv();
