@@ -353,7 +353,7 @@ export function buildCoachingPrompt(params: {
   shouldDraft?: boolean;
   isFrustrated?: boolean;
 }): string {
-  const { userRole, language, riskLevel, topicCategory, conversationHistory, patternSummaries, sessionId, sessionStatus, turnCount = 0, shouldDraft = false, isFrustrated = false } = params;
+  const { userRole, language, riskLevel: _riskLevel, topicCategory: _topicCategory, conversationHistory, patternSummaries, sessionId, sessionStatus, turnCount = 0, shouldDraft = false, isFrustrated = false } = params;
 
   const langInstruction = getLanguageInstruction(language);
   const historyStr = formatConversationHistory(conversationHistory);
@@ -467,8 +467,8 @@ AVOIDANT ADAPTATION: Feeling interrogated → STOP questions. Switch to reflecti
 CONTEXT — SESSION:
 Session ID: ${sessionId}
 Current user: ${userRole}
-Risk level: ${riskLevel}
-Topic: ${topicCategory}
+Risk level: (assess from message below)
+Topic: (assess from message below)
 
 Conversation history:
 ${historyStr}
@@ -485,7 +485,7 @@ CHAT ARCHITECTURE — CRITICAL:
 GUARDRAILS:
 1. NO RAW FORWARDING. Only reframed + approved.
 2. Don't surface past conflicts unless relevant.
-3. Risk Level: ${riskLevel}. ${getRiskInstructions(riskLevel)}
+3. Risk Level: Assess from message. Apply matching guardrails from L1-L4 scale.
 4. ${sessionStatus === 'ASYNC_COACHING' ? 'Partner has NOT joined. Help craft message and suggest inviting partner.' : 'Partner connected. Deliver approved messages.'}
 5. NEVER refuse to mediate. Help phrase messages for delivery.
 
@@ -710,7 +710,7 @@ function getLanguageInstruction(language: string): string {
   }
 }
 
-function getRiskInstructions(riskLevel: RiskLevel): string {
+export function getRiskInstructions(riskLevel: RiskLevel): string {
   switch (riskLevel) {
     case 'L1':
       return 'Proceed normally with coaching and reframe flow.';
