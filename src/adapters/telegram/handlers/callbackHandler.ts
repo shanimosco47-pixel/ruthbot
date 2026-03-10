@@ -446,11 +446,11 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 // Reframe Approval Flow (Rule 2)
 // ============================================
 
-async function handleReframeApprove(ctx: Context, _telegramId: string, data: string): Promise<void> {
+async function handleReframeApprove(ctx: Context, telegramId: string, data: string): Promise<void> {
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
-  const pending = pendingReframes.get(messageId);
+  const pending = await getPendingReframe(messageId);
 
   if (!pending) {
     await ctx.reply('ההודעה כבר לא זמינה.');
@@ -492,7 +492,7 @@ async function handleReframeEdit(ctx: Context, telegramId: string, data: string)
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
-  const pending = pendingReframes.get(messageId);
+  const pending = await getPendingReframe(messageId);
 
   if (!pending) {
     await ctx.reply('ההודעה כבר לא זמינה.');
@@ -530,7 +530,7 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
-  pendingReframes.delete(messageId);
+  await deletePendingReframe(messageId);
 
   await ctx.reply('ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.');
 
