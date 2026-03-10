@@ -56,18 +56,14 @@ export async function generateSessionEmbedding(params: {
     const conversationText = messages
       .filter((m) => m.rawContent)
       .map((m) => {
-        let content: string;
         try {
-          content = decrypt(m.rawContent!);
+          const content = decrypt(m.rawContent!);
+          return `[${m.senderRole}] ${content}`;
         } catch {
-          // SECURITY: Never pass encrypted ciphertext to AI — skip this message
-          logger.warn('Failed to decrypt message for embedding summary, skipping', {
-            sessionId,
-            senderRole: m.senderRole,
-          });
+          // Skip messages that fail decryption — sending encrypted hex to Claude is a data leak
+          logger.warn('Failed to decrypt message for embedding, skipping', { sessionId });
           return null;
         }
-        return `[${m.senderRole}] ${content}`;
       })
       .filter((line): line is string => line !== null)
       .join('\n');

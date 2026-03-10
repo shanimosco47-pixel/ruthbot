@@ -34,6 +34,15 @@ jest.mock('../../utils/logger', () => ({
 jest.mock('../../utils/encryption', () => ({
   hmacHash: jest.fn((input: string) => `hmac_${input}`),
   decrypt: jest.fn((input: string) => `decrypted_${input}`),
+  encrypt: jest.fn((input: string) => `encrypted_${input}`),
+}));
+
+jest.mock('../../config/env', () => ({
+  env: {
+    STRIPE_SECRET_KEY: 'sk_test_real_key_for_testing',
+    STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
+    STRIPE_PRICE_ID: 'price_test_123',
+  },
 }));
 
 // Mock Stripe

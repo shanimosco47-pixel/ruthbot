@@ -14,31 +14,27 @@ function getKey(): Buffer {
 }
 
 export function encrypt(text: string): string {
-  const iv = crypto.randomBytes(GCM_IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv) as crypto.CipherGCM;
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   const authTag = cipher.getAuthTag().toString('hex');
-  // Format: gcm:iv:authTag:ciphertext (prefix distinguishes from legacy CBC format)
-  return `gcm:${iv.toString('hex')}:${authTag}:${encrypted}`;
+  // Format: iv:encrypted:authTag (3 parts = GCM)
+  return `${iv.toString('hex')}:${encrypted}:${authTag}`;
 }
 
 export function decrypt(encryptedText: string): string {
-  if (encryptedText.startsWith('gcm:')) {
-    // GCM format: gcm:iv:authTag:ciphertext
-    const parts = encryptedText.split(':');
-    if (parts.length < 4) {
-      throw new Error('Invalid GCM encrypted text format');
+  const parts = encryptedText.split(':');
+
+  if (parts.length === 3) {
+    // GCM format: iv:encrypted:authTag
+    const [ivHex, encrypted, authTagHex] = parts;
+    if (!ivHex || encrypted === undefined || !authTagHex) {
+      throw new Error('Invalid encrypted text format');
     }
-    const [, ivHex, authTagHex, ...encryptedParts] = parts;
-    const encrypted = encryptedParts.join(':'); // rejoin in case ciphertext contained ':'
-    if (!ivHex || !authTagHex) {
-      throw new Error('Invalid GCM encrypted text format');
-    }
-    // Note: encrypted can be empty string for empty plaintext — that's valid for GCM
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv) as crypto.DecipherGCM;
     decipher.setAuthTag(authTag);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
@@ -59,7 +55,6 @@ export function decrypt(encryptedText: string): string {
 
 /**
  * Derive a separate HMAC key from the AES key to avoid key reuse.
- * Using the same key for both AES-CBC and HMAC weakens both operations.
  */
 function getHmacKey(): Buffer {
   return crypto.createHash('sha256').update(Buffer.concat([getKey(), Buffer.from('hmac-key-derivation')])).digest();
