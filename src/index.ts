@@ -9,6 +9,52 @@ import { decrypt } from './utils/encryption';
 import { Telegraf } from 'telegraf';
 import http from 'http';
 
+/**
+ * Simple in-memory rate limiter for webhook endpoints.
+ * Tracks request counts per IP within a sliding window.
+ */
+class RateLimiter {
+  private requests = new Map<string, number[]>();
+  private readonly maxRequests: number;
+  private readonly windowMs: number;
+
+  constructor(maxRequests: number, windowMs: number) {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+  }
+
+  isAllowed(key: string): boolean {
+    const now = Date.now();
+    const timestamps = this.requests.get(key) ?? [];
+    const valid = timestamps.filter((t) => now - t < this.windowMs);
+    if (valid.length >= this.maxRequests) {
+      this.requests.set(key, valid);
+      return false;
+    }
+    valid.push(now);
+    this.requests.set(key, valid);
+    return true;
+  }
+
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, timestamps] of this.requests) {
+      const valid = timestamps.filter((t) => now - t < this.windowMs);
+      if (valid.length === 0) {
+        this.requests.delete(key);
+      } else {
+        this.requests.set(key, valid);
+      }
+    }
+  }
+}
+
+// 100 requests per minute per IP — generous enough for legitimate traffic
+const webhookRateLimiter = new RateLimiter(100, 60_000);
+
+// Cleanup stale entries every 5 minutes
+setInterval(() => webhookRateLimiter.cleanup(), 5 * 60_000);
+
 async function main(): Promise<void> {
   logger.info('RuthBot starting...', {
     nodeEnv: env.NODE_ENV,
@@ -46,6 +92,17 @@ async function main(): Promise<void> {
 
   // Create HTTP server for Stripe webhooks
   const server = http.createServer(async (req, res) => {
+    // Rate limit all POST endpoints (webhooks)
+    if (req.method === 'POST') {
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+      if (!webhookRateLimiter.isAllowed(clientIp)) {
+        logger.warn('Rate limit exceeded', { ip: clientIp, url: req.url });
+        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' });
+        res.end(JSON.stringify({ error: 'Too many requests' }));
+        return;
+      }
+    }
+
     if (req.method === 'POST' && req.url === '/stripe/webhook') {
       const body = await readBody(req, res);
       if (body === null) return;
@@ -63,8 +120,15 @@ async function main(): Promise<void> {
         res.end(JSON.stringify({ received: true }));
       }
     } else if (req.method === 'GET' && req.url === '/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', version: 'v3.0', timestamp: new Date().toISOString() }));
+      try {
+        await prisma.$queryRawUnsafe('SELECT 1');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', version: 'v3.2', timestamp: new Date().toISOString() }));
+      } catch (dbError) {
+        logger.error('Health check DB failure', { error: dbError instanceof Error ? dbError.message : String(dbError) });
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'degraded', reason: 'database_unavailable', timestamp: new Date().toISOString() }));
+      }
     } else {
       res.writeHead(404);
       res.end();

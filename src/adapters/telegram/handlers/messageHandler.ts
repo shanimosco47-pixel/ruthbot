@@ -11,7 +11,11 @@ import { encrypt, decrypt } from '../../../utils/encryption';
 import { MAX_REFLECTION_REPROMPTS } from '../../../config/constants';
 import { env } from '../../../config/env';
 import { sendSessionSummaryEmail } from '../../../services/email/emailService';
-import { userStates, pendingReframes } from './callbackHandler';
+import {
+  getUserState, setUserState, deleteUserState,
+  getPendingReframe, setPendingReframe,
+} from '../../../utils/stateStore';
+import type { UserFlowState } from '../../../utils/stateStore';
 import type { MirrorEvaluation, SessionContext, PendingReframe } from '../../../types';
 import type { TopicCategory } from '../../../config/constants';
 
@@ -31,8 +35,16 @@ export async function handleMessage(ctx: Context): Promise<void> {
     return;
   }
 
-  // Get user state
-  const state = userStates.get(telegramId);
+  // Get user state (graceful fallback if DB table missing or query fails)
+  let state: UserFlowState | null = null;
+  try {
+    state = await getUserState(telegramId);
+  } catch (error) {
+    logger.warn('getUserState failed, falling back to session-based routing', {
+      telegramId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   if (state) {
     switch (state.state) {
@@ -156,7 +168,7 @@ async function handleInvitationDraftInput(
     ])
   );
 
-  userStates.set(telegramId, {
+  await setUserState(telegramId, {
     state: 'invitation_draft_selection',
     sessionId,
     data: { drafts },
@@ -195,10 +207,10 @@ async function handleReframeEditInput(
   ctx: Context,
   telegramId: string,
   editedText: string,
-  state: { state: string; sessionId?: string; data?: Record<string, unknown> }
+  state: UserFlowState
 ): Promise<void> {
   const messageId = state.data?.messageId as string;
-  const pending = pendingReframes.get(messageId);
+  const pending = await getPendingReframe(messageId);
 
   if (!pending || !state.sessionId) {
     await ctx.reply('אירעה שגיאה. נסה/י שוב.');
@@ -235,7 +247,7 @@ async function handleReframeEditInput(
     });
 
     pending.reframedText = newReframe;
-    pendingReframes.set(messageId, pending);
+    await setPendingReframe(messageId, pending);
 
     await ctx.reply(
       `📝 הנה גרסה מעודכנת:\n\n${newReframe}`,
@@ -249,7 +261,7 @@ async function handleReframeEditInput(
     // Clean edit — show approval flow again
     pending.reframedText = editedText;
     pending.editIterations++;
-    pendingReframes.set(messageId, pending);
+    await setPendingReframe(messageId, pending);
 
     await ctx.reply(
       `📝 הגרסה שלך:\n\n${editedText}`,
@@ -261,7 +273,7 @@ async function handleReframeEditInput(
     );
   }
 
-  userStates.set(telegramId, { state: 'coaching', sessionId: state.sessionId });
+  await setUserState(telegramId, { state: 'coaching', sessionId: state.sessionId });
 }
 
 // ============================================
@@ -272,12 +284,12 @@ async function handleReflectionStep1(
   ctx: Context,
   telegramId: string,
   text: string,
-  state: { state: string; sessionId?: string; data?: Record<string, unknown> }
+  state: UserFlowState
 ): Promise<void> {
   if (!state.sessionId) {
     logger.warn('Reflection gate step1 called without sessionId', { telegramId });
     await ctx.reply('אירעה שגיאה. נסה/י שוב עם /start');
-    userStates.delete(telegramId);
+    await deleteUserState(telegramId);
     return;
   }
 
@@ -300,7 +312,7 @@ async function handleReflectionStep1(
     'תודה ששיתפת ❤️\n\nעכשיו, האם תוכל/י לשקף במילים שלך מה הבנת שחשוב לבן/בת הזוג שלך?'
   );
 
-  userStates.set(telegramId, {
+  await setUserState(telegramId, {
     state: 'reflection_gate_mirror',
     sessionId: state.sessionId,
     data: { ...state.data, reflectionResponse: text },
@@ -311,12 +323,12 @@ async function handleReflectionMirror(
   ctx: Context,
   telegramId: string,
   mirrorText: string,
-  state: { state: string; sessionId?: string; data?: Record<string, unknown> }
+  state: UserFlowState
 ): Promise<void> {
   if (!state.sessionId) {
     logger.warn('Reflection gate mirror called without sessionId', { telegramId });
     await ctx.reply('אירעה שגיאה. נסה/י שוב עם /start');
-    userStates.delete(telegramId);
+    await deleteUserState(telegramId);
     return;
   }
 
@@ -350,22 +362,31 @@ async function handleReflectionMirror(
   const currentAttempts = await SessionManager.incrementMirrorAttempts(state.sessionId);
 
   if (evaluation.mirror_quality === 'GOOD' || currentAttempts >= MAX_REFLECTION_REPROMPTS) {
+    // Transition to ACTIVE — wrapped in try-catch to prevent stuck state
+    try {
+      await SessionStateMachine.transition(state.sessionId, 'ACTIVE');
+    } catch (transitionError) {
+      logger.error('Failed to transition from REFLECTION_GATE to ACTIVE', {
+        sessionId: state.sessionId,
+        error: transitionError instanceof Error ? transitionError.message : String(transitionError),
+      });
+      await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+      return;
+    }
+
     // Proceed to Empathy Bridge
     await ctx.reply(
       'תודה ששיקפת 🙏\n\nעכשיו הבוט יעזור לך לנסח את התגובה שלך — גם אתה זכאי/ת להישמע.'
     );
 
-    // Transition to ACTIVE
-    await SessionStateMachine.transition(state.sessionId, 'ACTIVE');
-
-    userStates.set(telegramId, { state: 'coaching', sessionId: state.sessionId });
+    await setUserState(telegramId, { state: 'coaching', sessionId: state.sessionId });
   } else if (evaluation.mirror_quality === 'PARTIAL' || evaluation.mirror_quality === 'MISSED') {
     // Re-prompt (max 2 total)
     const reprompt = evaluation.suggested_reprompt || 'נסה/י לשקף שוב — מה לדעתך חשוב לבן/בת הזוג שלך?';
     await ctx.reply(reprompt);
 
     // Stay in mirror state
-    userStates.set(telegramId, {
+    await setUserState(telegramId, {
       state: 'reflection_gate_mirror',
       sessionId: state.sessionId,
       data: state.data,
@@ -377,7 +398,7 @@ async function handleReflectionMirror(
       mirrorQuality: evaluation.mirror_quality,
     });
     await ctx.reply('נסה/י לשקף שוב — מה לדעתך חשוב לבן/בת הזוג שלך?');
-    userStates.set(telegramId, {
+    await setUserState(telegramId, {
       state: 'reflection_gate_mirror',
       sessionId: state.sessionId,
       data: state.data,
@@ -391,7 +412,7 @@ async function handleReflectionMirror(
 
 async function handleActiveSessionMessage(
   ctx: Context,
-  _telegramId: string,
+  telegramId: string,
   text: string,
   sessionContext: SessionContext
 ): Promise<void> {
@@ -439,13 +460,14 @@ async function handleActiveSessionMessage(
       const pending: PendingReframe = {
         sessionId: sessionContext.sessionId,
         senderRole: sessionContext.currentRole,
+        ownerTelegramId: telegramId,
         reframedText: result.reframedMessage,
         originalText: text,
         editIterations: 0,
         messageId: message.id,
       };
 
-      pendingReframes.set(message.id, pending);
+      await setPendingReframe(message.id, pending);
 
       // Show reframe with approval buttons (Rule 2)
       await ctx.reply(
@@ -485,20 +507,20 @@ async function handleCoachingMessage(
 ): Promise<void> {
   await ctx.sendChatAction('typing');
 
-  const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
-  const session = await SessionManager.getActiveSession(userId);
-
-  if (!session) {
-    await ctx.reply('אין סשן פתוח. הקלד/י /start להתחיל.');
-    return;
-  }
-
-  const language = detectLanguage(text);
-
-  // Fetch full session for correct userAId/userBId
-  const fullSession = await SessionManager.getSession(sessionId);
-
   try {
+    const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
+    const session = await SessionManager.getActiveSession(userId);
+
+    if (!session) {
+      await ctx.reply('אין סשן פתוח. הקלד/י /start להתחיל.');
+      return;
+    }
+
+    const language = detectLanguage(text);
+
+    // Fetch full session for correct userAId/userBId
+    const fullSession = await SessionManager.getSession(sessionId);
+
     const result = await processMessage({
       context: {
         sessionId,
@@ -548,13 +570,14 @@ async function handleCoachingMessage(
       const pendingItem: PendingReframe = {
         sessionId,
         senderRole: session?.role || 'USER_A',
+        ownerTelegramId: telegramId,
         reframedText: result.reframedMessage,
         originalText: text,
         editIterations: 0,
         messageId: message.id,
       };
 
-      pendingReframes.set(message.id, pendingItem);
+      await setPendingReframe(message.id, pendingItem);
 
       await ctx.reply(
         `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`,
@@ -594,7 +617,7 @@ async function handleInviteMenuButton(ctx: Context, telegramId: string): Promise
 
   // Start invitation drafting
   await ctx.reply('מה הדבר הכי חשוב שאתה רוצה שהם ידעו לפני שנכנסים?');
-  userStates.set(telegramId, { state: 'invitation_drafting', sessionId: session.id });
+  await setUserState(telegramId, { state: 'invitation_drafting', sessionId: session.id });
 }
 
 // ============================================
@@ -634,7 +657,7 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
 
   if (!session) {
     await ctx.reply('📧 הסיכום יישלח כשהסשן ייסגר. תודה! ❤️');
-    userStates.delete(telegramId);
+    await deleteUserState(telegramId);
     return;
   }
 
@@ -724,5 +747,5 @@ async function handleEmailInput(ctx: Context, telegramId: string, email: string)
     await ctx.reply('לא הצלחנו לשלוח את המייל. ניתן לנסות שוב מאוחר יותר.');
   }
 
-  userStates.delete(telegramId);
+  await deleteUserState(telegramId);
 }

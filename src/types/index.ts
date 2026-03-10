@@ -69,6 +69,7 @@ export type ReframeAction = 'approve' | 'edit' | 'cancel';
 export interface PendingReframe {
   sessionId: string;
   senderRole: 'USER_A' | 'USER_B';
+  ownerTelegramId: string; // Telegram ID of the user who created this reframe — for authorization
   reframedText: string;
   originalText: string;
   editIterations: number;

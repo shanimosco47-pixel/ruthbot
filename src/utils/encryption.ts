@@ -1,10 +1,13 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
 
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12; // GCM standard: 12 bytes (96 bits)
-// Legacy CBC support for reading old data during migration
-const LEGACY_ALGORITHM = 'aes-256-cbc';
+// AES-256-GCM: Authenticated encryption (AEAD) — provides integrity + confidentiality
+const ALGORITHM_GCM = 'aes-256-gcm';
+const GCM_IV_LENGTH = 12; // NIST recommended IV length for GCM
+const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag
+
+// Legacy CBC support for decrypting old data (pre-migration)
+const ALGORITHM_CBC = 'aes-256-cbc';
 
 function getKey(): Buffer {
   return Buffer.from(env.ENCRYPTION_KEY, 'hex');
@@ -36,20 +39,18 @@ export function decrypt(encryptedText: string): string {
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
-  } else if (parts.length === 2) {
-    // Legacy CBC format: iv:encrypted (2 parts)
-    const [ivHex, encrypted] = parts;
-    if (!ivHex || !encrypted) {
-      throw new Error('Invalid encrypted text format');
-    }
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv(LEGACY_ALGORITHM, getKey(), iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } else {
+  }
+
+  // Legacy CBC format: iv:ciphertext (backward compatibility for existing DB data)
+  const [ivHex, encrypted] = encryptedText.split(':');
+  if (!ivHex || !encrypted) {
     throw new Error('Invalid encrypted text format');
   }
+  const iv = Buffer.from(ivHex, 'hex');
+  const decipher = crypto.createDecipheriv(ALGORITHM_CBC, getKey(), iv);
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
 }
 
 /**

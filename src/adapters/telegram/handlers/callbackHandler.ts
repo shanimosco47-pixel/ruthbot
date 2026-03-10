@@ -13,18 +13,11 @@ import { MAX_EDIT_ITERATIONS } from '../../../config/constants';
 import { getMessageTemplate } from '../../../utils/responseValidator';
 import type { MessageTemplate } from '../../../utils/responseValidator';
 import type { PendingReframe } from '../../../types';
-
-// TODO: [PERF REVIEW NEEDED] In-memory state is lost on server restart (Render free tier restarts on deploy and idle).
-// Pending reframes and user states should be persisted to DB for production resilience.
-// Current impact: mid-flow reframes/states lost on restart. Acceptable for MVP, not for scale.
-const pendingReframes = new Map<string, PendingReframe>();
-const userStates = new Map<string, {
-  state: string;
-  sessionId?: string;
-  data?: Record<string, unknown>;
-}>();
-
-export { userStates, pendingReframes };
+import {
+  getUserState, setUserState, deleteUserState,
+  getPendingReframe, setPendingReframe, deletePendingReframe,
+  cleanupSessionStateDB,
+} from '../../../utils/stateStore';
 
 /**
  * Parse and validate callback data with expected number of parts.
@@ -40,23 +33,11 @@ function parseCallbackData(data: string, expectedMinParts: number): string[] | n
 }
 
 /**
- * Clean up all in-memory state for a given session.
+ * Clean up all DB-persisted state for a given session.
  * Called on session close, L4 hard stop, /start restart.
  */
-export function cleanupSessionState(sessionId: string): void {
-  // Remove all pending reframes for this session
-  for (const [messageId, pending] of pendingReframes) {
-    if (pending.sessionId === sessionId) {
-      pendingReframes.delete(messageId);
-    }
-  }
-
-  // Remove all user states tied to this session
-  for (const [telegramId, state] of userStates) {
-    if (state.sessionId === sessionId) {
-      userStates.delete(telegramId);
-    }
-  }
+export async function cleanupSessionState(sessionId: string): Promise<void> {
+  await cleanupSessionStateDB(sessionId);
 }
 
 /**
@@ -119,6 +100,33 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
 
 async function handleDisclaimerAccept(ctx: Context, telegramId: string): Promise<void> {
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
+
+  // Guard: prevent double-click creating duplicate sessions
+  const existingSession = await SessionManager.getActiveSession(userId);
+  if (existingSession) {
+    logger.info('Disclaimer accept: user already has active session, reusing', {
+      telegramId,
+      sessionId: existingSession.id,
+      status: existingSession.status,
+    });
+
+    // If already past onboarding, just acknowledge
+    if (existingSession.status !== 'INVITE_CRAFTING') {
+      await ctx.reply('כבר יש לך סשן פתוח. אפשר להמשיך לכתוב.');
+      return;
+    }
+
+    // Still in INVITE_CRAFTING — re-show the onboarding choice
+    await ctx.reply(
+      'רוצה לעבד לבד קודם, או להזמין את בן/בת הזוג? אני אגשר ביניכם.',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('🤝 להזמין עכשיו', `onboard_choice:invite:${existingSession.id}`)],
+        [Markup.button.callback('🧘 לעבד לבד קודם', `onboard_choice:solo:${existingSession.id}`)],
+      ])
+    );
+    return;
+  }
+
   const sessionId = await SessionManager.createSession(userId);
 
   logger.info('Disclaimer accepted, session created', { telegramId, sessionId });
@@ -149,7 +157,24 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
   const choice = parts[1]; // 'invite' or 'solo'
   const sessionId = parts[2];
 
+  // Guard: verify session exists and check current state
+  let currentStatus: string;
+  try {
+    currentStatus = await SessionStateMachine.getStatus(sessionId);
+  } catch {
+    logger.warn('Onboarding choice for non-existent session', { sessionId, choice });
+    await ctx.reply('הסשן לא נמצא. הקלד/י /start כדי להתחיל מחדש.');
+    return;
+  }
+
   if (choice === 'solo') {
+    // If already transitioned (e.g., double-click), just set state and acknowledge
+    if (currentStatus === 'ASYNC_COACHING') {
+      logger.info('Onboarding: session already ASYNC_COACHING, skipping transition', { sessionId });
+      await setUserState(telegramId, { state: 'coaching', sessionId });
+      return;
+    }
+
     // Transition to ASYNC_COACHING
     await SessionStateMachine.transition(sessionId, 'ASYNC_COACHING', { reason: 'user_chose_solo' });
 
@@ -162,14 +187,14 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
 3️⃣ מה אסור שיקרה?`
     );
 
-    userStates.set(telegramId, { state: 'coaching', sessionId });
+    await setUserState(telegramId, { state: 'coaching', sessionId });
   } else {
     // Start invitation flow (1B)
     await ctx.reply(
       'מה הדבר הכי חשוב שאתה רוצה שהם ידעו לפני שנכנסים?'
     );
 
-    userStates.set(telegramId, { state: 'invitation_drafting', sessionId });
+    await setUserState(telegramId, { state: 'invitation_drafting', sessionId });
   }
 }
 
@@ -188,7 +213,7 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
   const ttlHours = ttlValue as 1 | 3 | 12;
   const sessionId = parts[2];
 
-  const state = userStates.get(telegramId);
+  const state = await getUserState(telegramId);
   if (!state || !state.sessionId) return;
 
   // Get bot username
@@ -234,7 +259,7 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
     ])
   );
 
-  userStates.set(telegramId, { state: 'coaching', sessionId });
+  await setUserState(telegramId, { state: 'coaching', sessionId });
 }
 
 // ============================================
@@ -261,7 +286,7 @@ async function handleTelegramCheck(ctx: Context, telegramId: string, data: strin
       'לא נורא! הלינק עובד גם אם הם יורידים טלגרם עכשיו. הנה טקסט הזמנה שמסביר למה אנחנו בטלגרם:'
     );
 
-    const state = userStates.get(telegramId);
+    const state = await getUserState(telegramId);
     const invitationMessage = (state?.data?.invitationMessage as string) || '';
 
     const modifiedText = `היי, פתחתי לנו סשן ברות בוט זוגיות. חשוב לי שנדבר בצורה רגועה שמכבדת את שנינו.
@@ -273,8 +298,10 @@ async function handleTelegramCheck(ctx: Context, telegramId: string, data: strin
 ${invitationMessage ? `\n${invitationMessage}` : ''}`;
 
     if (state) {
-      state.data = { ...state.data, invitationMessage: modifiedText };
-      userStates.set(telegramId, state);
+      await setUserState(telegramId, {
+        ...state,
+        data: { ...state.data, invitationMessage: modifiedText },
+      });
     }
 
     await showTtlSelection(ctx, sessionId);
@@ -332,8 +359,14 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
   if (latestReframe?.reframedContent) {
     try {
       reframedText = decrypt(latestReframe.reframedContent);
-    } catch {
-      reframedText = latestReframe.reframedContent;
+    } catch (decryptError) {
+      // SECURITY: Never send encrypted ciphertext to user — log error and show empty
+      logger.error('Failed to decrypt reframed content for User B delivery', {
+        sessionId,
+        messageId: latestReframe.id,
+        error: decryptError instanceof Error ? decryptError.message : String(decryptError),
+      });
+      reframedText = '';
     }
 
     // Deliver the reframe FIRST, then mark as delivered (Section 2.5, Phase 3, 3A)
@@ -364,7 +397,7 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
     );
   }
 
-  userStates.set(telegramId, {
+  await setUserState(telegramId, {
     state: 'reflection_gate_step1',
     sessionId,
     data: { reframedContent: reframedText },
@@ -386,6 +419,13 @@ async function handleReframeApprove(ctx: Context, _telegramId: string, data: str
     return;
   }
 
+  // Authorization: only the user who created this reframe can approve it
+  if (pending.ownerTelegramId !== telegramId) {
+    logger.warn('Unauthorized reframe approve attempt', { telegramId, messageId });
+    await ctx.reply('אין הרשאה לפעולה זו.');
+    return;
+  }
+
   // Mark as approved (but NOT delivered yet — only after successful send)
   await prisma.message.update({
     where: { id: messageId },
@@ -401,11 +441,11 @@ async function handleReframeApprove(ctx: Context, _telegramId: string, data: str
       where: { id: messageId },
       data: { delivered: true },
     });
-    pendingReframes.delete(messageId);
+    await deletePendingReframe(messageId);
     await ctx.reply('✅ ההודעה נשלחה לבן/בת הזוג.');
   } else {
     // Partner not yet in session — message queued for delivery when they join
-    pendingReframes.delete(messageId);
+    await deletePendingReframe(messageId);
     await ctx.reply('✅ ההודעה אושרה ותישלח ברגע שבן/בת הזוג יצטרף/תצטרף לסשן.');
   }
 }
@@ -418,6 +458,13 @@ async function handleReframeEdit(ctx: Context, telegramId: string, data: string)
 
   if (!pending) {
     await ctx.reply('ההודעה כבר לא זמינה.');
+    return;
+  }
+
+  // Authorization: only the owner can edit
+  if (pending.ownerTelegramId !== telegramId) {
+    logger.warn('Unauthorized reframe edit attempt', { telegramId, messageId });
+    await ctx.reply('אין הרשאה לפעולה זו.');
     return;
   }
 
@@ -434,7 +481,7 @@ async function handleReframeEdit(ctx: Context, telegramId: string, data: string)
 
   await ctx.reply('כתוב/י את הגרסה שלך:');
 
-  userStates.set(telegramId, {
+  await setUserState(telegramId, {
     state: 'editing_reframe',
     sessionId: pending.sessionId,
     data: { messageId },
@@ -449,9 +496,10 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
 
   await ctx.reply('ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.');
 
-  userStates.set(telegramId, {
+  const currentState = await getUserState(telegramId);
+  await setUserState(telegramId, {
     state: 'coaching',
-    sessionId: userStates.get(telegramId)?.sessionId,
+    sessionId: currentState?.sessionId,
   });
 }
 
@@ -480,11 +528,11 @@ async function handlePartnerDeclinedChoice(ctx: Context, telegramId: string, dat
   } else if (choice === 'solo') {
     await SessionStateMachine.transition(sessionId, 'ASYNC_COACHING', { reason: 'partner_declined_solo' });
     await ctx.reply('בסדר גמור 💪 בואו נמשיך ביחד. מה עובר עליך עכשיו?');
-    userStates.set(telegramId, { state: 'coaching', sessionId });
+    await setUserState(telegramId, { state: 'coaching', sessionId });
   } else if (choice === 'close') {
     await SessionStateMachine.transition(sessionId, 'CLOSED', { reason: 'user_chose_close' });
     await ctx.reply('הסשן נסגר. אפשר תמיד להתחיל מחדש עם /start ❤️');
-    userStates.delete(telegramId);
+    await deleteUserState(telegramId);
   }
 }
 
@@ -500,11 +548,11 @@ async function handleInviteDraftChoice(ctx: Context, telegramId: string, data: s
 
   if (choice === 'regenerate') {
     await ctx.reply('נסח/י שוב — מה הדבר הכי חשוב שתרצה שידעו?');
-    userStates.set(telegramId, { state: 'invitation_drafting', sessionId });
+    await setUserState(telegramId, { state: 'invitation_drafting', sessionId });
     return;
   }
 
-  const state = userStates.get(telegramId);
+  const state = await getUserState(telegramId);
   const drafts = state?.data?.drafts as string[] | undefined;
   const selectedDraft = choice === 'v1' ? drafts?.[0] : drafts?.[1];
 
@@ -517,7 +565,7 @@ async function handleInviteDraftChoice(ctx: Context, telegramId: string, data: s
   await SessionManager.storeInvitationMessage(sessionId, selectedDraft);
 
   // Update state with the selected message
-  userStates.set(telegramId, {
+  await setUserState(telegramId, {
     state: 'pre_invite',
     sessionId,
     data: { invitationMessage: selectedDraft },
@@ -545,10 +593,10 @@ async function handleEmailOptChoice(ctx: Context, telegramId: string, data: stri
 
   if (choice === 'yes') {
     await ctx.reply('מה כתובת המייל שלך?');
-    userStates.set(telegramId, { state: 'awaiting_email' });
+    await setUserState(telegramId, { state: 'awaiting_email' });
   } else {
     await ctx.reply('בסדר! הסיכום נשלח לך כאן בטלגרם. תודה שהשתמשת ברות בוט זוגיות ❤️');
-    userStates.delete(telegramId);
+    await deleteUserState(telegramId);
   }
 }
 
@@ -569,7 +617,7 @@ async function handleDeleteConfirm(ctx: Context, telegramId: string, data: strin
     await ctx.reply('ביטלנו את הבקשה. הנתונים שלך לא נמחקו.');
   }
 
-  userStates.delete(telegramId);
+  await deleteUserState(telegramId);
 }
 
 // ============================================
@@ -647,11 +695,16 @@ async function handleFrustrationChoice(ctx: Context, telegramId: string, data: s
 
   const template = getMessageTemplate(templateType);
 
+  // Determine the sender's actual role (could be User A or User B)
+  const userId = await SessionManager.findOrCreateUser(telegramId);
+  const activeSession = await SessionManager.getActiveSession(userId);
+  const senderRole = activeSession?.role || 'USER_A';
+
   // Create a proper REFRAME message in DB so it goes through the standard delivery flow
   const message = await prisma.message.create({
     data: {
       sessionId,
-      senderRole: 'USER_A', // Frustration templates are always from User A
+      senderRole,
       messageType: 'REFRAME',
       reframedContent: encrypt(template),
       rawContent: encrypt(`[frustration template: ${templateType}]`),
@@ -660,14 +713,15 @@ async function handleFrustrationChoice(ctx: Context, telegramId: string, data: s
 
   const pending: PendingReframe = {
     sessionId,
-    senderRole: 'USER_A',
+    senderRole,
+    ownerTelegramId: telegramId,
     reframedText: template,
     originalText: `[frustration template: ${templateType}]`,
     editIterations: 0,
     messageId: message.id,
   };
 
-  pendingReframes.set(message.id, pending);
+  await setPendingReframe(message.id, pending);
 
   // Use standard reframe approval buttons — connects to the working delivery flow
   await ctx.reply(
@@ -679,7 +733,7 @@ async function handleFrustrationChoice(ctx: Context, telegramId: string, data: s
     ])
   );
 
-  userStates.set(telegramId, { state: 'coaching', sessionId });
+  await setUserState(telegramId, { state: 'coaching', sessionId });
 }
 
 // NOTE: handleDraftChoice removed — frustration templates now use the standard

@@ -164,9 +164,11 @@ export async function classifyRiskAndCoach(params: {
       const rawCoaching = (raw as Record<string, unknown>)?.coaching;
 
       const riskResult = riskAssessmentSchema.safeParse(rawRisk);
+      // SAFETY: Fallback to L3_PLUS (restrictive), NOT L2 (permissive) — a threatening
+      // message with malformed JSON must not be classified as safe.
       const risk: RiskAssessment = riskResult.success
         ? riskResult.data
-        : { risk_level: 'L3_PLUS', topic_category: FALLBACK_TOPIC_CATEGORY, action_required: 'URGENT: Invalid combined response — manual review required', reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — classified as L3_PLUS for safety' };
+        : { risk_level: 'L3_PLUS', topic_category: FALLBACK_TOPIC_CATEGORY, action_required: 'Fallback — invalid combined response, restrictive classification applied', reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — L3_PLUS for safety' };
 
       const coaching = typeof rawCoaching === 'string' && rawCoaching.length > 0
         ? checkResponseQuality(rawCoaching)

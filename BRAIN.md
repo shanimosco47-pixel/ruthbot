@@ -1,12 +1,12 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-03-05 (V3.1 code review fixes — safety, delivery, state machine)
+> Last updated: 2026-03-10 (V3.2 comprehensive code review — encryption, safety, authorization, race conditions)
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V3.1 — CODE REVIEW FIXES APPLIED 🔶
+## Current Status: RUTH V3.2 — COMPREHENSIVE SECURITY REVIEW APPLIED 🔶
 
 The bot is **live in production** on Render free tier (webhook mode) — currently running **V2.3**.
 V3.1 code (V3 + code review fixes) is local — needs push to GitHub + manual Render deploy.
@@ -18,6 +18,38 @@ V3.1 code (V3 + code review fixes) is local — needs push to GitHub + manual Re
 - **⚡ TO DEPLOY V3.1:** Commit review fixes → `git push` → Render "Manual Deploy" → "Deploy latest commit"
 - **V2 Training score:** 44 → 90.3 across 13 training runs
 - **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
+
+### RUTH V3.2 Comprehensive Security Review (2026-03-10)
+- **CRITICAL — Encryption upgraded:** AES-256-CBC → AES-256-GCM (authenticated encryption)
+  - New format: `gcm:iv:authTag:ciphertext` — backward compatible with existing CBC data
+  - Files: `encryption.ts`, `encryption.test.ts`
+- **CRITICAL — Risk engine safety fallback:** JSON parse fallback changed from L2 (permissive) → L3_PLUS (restrictive)
+  - Both `classifyRisk()` and `classifyRiskAndCoach()` fallback paths now use L3_PLUS
+  - A threatening message with malformed JSON is no longer classified as safe
+  - Files: `riskEngine.ts`, `riskEngine.test.ts`
+- **CRITICAL — Decrypt error fallback:** Encrypted ciphertext no longer sent to users on decrypt failure
+  - `callbackHandler.ts`: logs error, shows empty text instead of encrypted blob
+  - `memoryService.ts`: skips corrupted messages instead of passing ciphertext to Claude
+- **HIGH — Reframe authorization:** Added `ownerTelegramId` to `PendingReframe` type
+  - `handleReframeApprove/Edit/Cancel` now verify the caller owns the reframe
+  - Prevents cross-user reframe manipulation via spoofed callback data
+  - Files: `types/index.ts`, `callbackHandler.ts`, `messageHandler.ts`, `voiceHandler.ts`
+- **HIGH — Callback data validation:** All callback handlers now use `parseCallbackData()` consistently
+  - Fixed: `consent_accept`, `reframe_approve/edit/cancel`, `email_opt`, `delete_confirm`
+  - TTL validation now checks `[1, 3, 12].includes(ttlValue)` instead of unchecked `parseInt` cast
+- **HIGH — Token consumption race:** `consumeInviteToken()` now uses atomic `updateMany` with CAS
+  - Prevents double-join when User B clicks invite link twice concurrently
+- **MEDIUM — Frustration senderRole:** Template messages now use actual user role (was hardcoded `USER_A`)
+  - If User B triggers frustration, reframe is now correctly attributed to `USER_B`
+- **MEDIUM — Consent/transition ordering:** `recordPartnerConsent()` now transitions FIRST, then stores data
+  - If transition fails, User B data is not stored (GDPR atomicity)
+  - Removed duplicate transition call from `handleConsentAccept`
+- **MEDIUM — Reflection Gate error handling:** Transition wrapped in try-catch
+  - On failure: logs error, sends user-friendly message, prevents stuck state
+- **MEDIUM — Empty message guard:** Pipeline now rejects empty/whitespace-only messages before API calls
+- **DB — Missing indexes added:** `userAId`, `userBId`, `anonymizedCoupleId` on `CoupleSession`; `anonymizedCoupleId` on `SessionTelemetry` and `SessionEmbedding`
+- **Tests:** 232 passing, 0 failing (updated encryption + risk engine tests for new behavior)
+- **Files modified:** `encryption.ts`, `riskEngine.ts`, `callbackHandler.ts`, `messageHandler.ts`, `voiceHandler.ts`, `sessionManager.ts`, `messagePipeline.ts`, `memoryService.ts`, `types/index.ts`, `schema.prisma`, `encryption.test.ts`, `riskEngine.test.ts`, `BRAIN.md`
 
 ### RUTH V3.1 Code Review Fixes (2026-03-05)
 - **C1 — Emergency resources mismatch:** Unified L4 prompt template numbers to match `constants.ts` (violence: 118, suicide: *6785)
