@@ -415,6 +415,25 @@ function startPeriodicTasks(bot: Telegraf): NodeJS.Timeout[] {
     }
   }, 5 * 60 * 1000));
 
+  // Self-ping keep-alive: prevents Render free tier from spinning down
+  // Belt-and-suspenders with UptimeRobot — hits own /health every 4 minutes
+  if (env.NODE_ENV === 'production' && env.WEBHOOK_URL) {
+    const healthUrl = `${env.WEBHOOK_URL}/health`;
+    timers.push(setInterval(async () => {
+      try {
+        const res = await fetch(healthUrl);
+        if (!res.ok) {
+          logger.warn('Self-ping health check returned non-OK', { status: res.status });
+        }
+      } catch (error) {
+        logger.warn('Self-ping failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }, 4 * 60 * 1000));
+    logger.info('Self-ping keep-alive enabled', { healthUrl, intervalMs: 240_000 });
+  }
+
   return timers;
 }
 
