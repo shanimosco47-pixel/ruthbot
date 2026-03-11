@@ -126,8 +126,9 @@ export async function classifyRiskAndCoach(params: {
   turnCount?: number;
   shouldDraft?: boolean;
   isFrustrated?: boolean;
+  isMetaFeedback?: boolean;
 }): Promise<CombinedRiskCoachingResult> {
-  const { message, sessionId, senderRole, userRole, language, conversationHistory, patternSummaries, sessionStatus, turnCount, shouldDraft, isFrustrated } = params;
+  const { message, sessionId, senderRole, userRole, language, conversationHistory, patternSummaries, sessionStatus, turnCount, shouldDraft, isFrustrated, isMetaFeedback } = params;
 
   const { staticPart, dynamicPart } = buildCombinedRiskCoachingPrompt({
     userRole,
@@ -139,6 +140,7 @@ export async function classifyRiskAndCoach(params: {
     turnCount,
     shouldDraft,
     isFrustrated,
+    isMetaFeedback,
   });
 
   try {

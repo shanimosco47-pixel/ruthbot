@@ -98,6 +98,25 @@ export async function deletePendingReframe(messageId: string): Promise<void> {
   });
 }
 
+/**
+ * RC5: Invalidate ALL pending reframes for a given session + owner.
+ * Called before creating a new pending reframe — ensures old buttons
+ * can't silently approve stale messages.
+ */
+export async function invalidateOldPendingReframes(sessionId: string, ownerTelegramId: string): Promise<number> {
+  const result = await prisma.pendingReframeState.deleteMany({
+    where: { sessionId, ownerTelegramId },
+  });
+  if (result.count > 0) {
+    logger.info('Invalidated old pending reframes', {
+      sessionId,
+      ownerTelegramId,
+      count: result.count,
+    });
+  }
+  return result.count;
+}
+
 // ============================================
 // Session Cleanup — replaces cleanupSessionState()
 // ============================================

@@ -3,6 +3,7 @@ import { SessionManager } from '../../../core/stateMachine/sessionManager';
 import { prisma } from '../../../db/client';
 import { hmacHash } from '../../../utils/encryption';
 import { logger } from '../../../utils/logger';
+import { trackedReply, logBotMessage } from '../../../utils/trackedReply';
 
 const DISCLAIMER_HE = `⚖️ *לפני שמתחילים — חשוב שתדע/י:*
 
@@ -103,7 +104,7 @@ async function handleDeepLinkStart(
 
 📌 נושא הסשן: ${topicCategory}`;
 
-  await ctx.reply(softLanding);
+  await trackedReply(ctx, softLanding, { sessionId, senderRole: 'USER_B' });
 
   // Show disclaimer + consent button
   await ctx.reply(DISCLAIMER_HE, {
@@ -114,7 +115,9 @@ async function handleDeepLinkStart(
   });
 
   // Notify User A that partner opened the link
-  await notifyUserA(ctx, session.userAId, 'בן/בת הזוג פתח/ה את הלינק! 🎉\nממתינים להסכמה...');
+  const notifyMsg = 'בן/בת הזוג פתח/ה את הלינק! 🎉\nממתינים להסכמה...';
+  await notifyUserA(ctx, session.userAId, notifyMsg);
+  await logBotMessage(sessionId, notifyMsg, 'USER_A');
 }
 
 async function handleUnsubscribe(ctx: Context, telegramId: string): Promise<void> {

@@ -166,6 +166,61 @@ function truncateToWordLimit(text: string, maxWords: number): string {
 }
 
 // ============================================
+// Meta-Feedback Detection (RC3)
+// ============================================
+
+// Phrases that indicate the user is talking ABOUT the bot, not about their relationship.
+// These should be routed differently — acknowledged, not treated as therapy content.
+const META_FEEDBACK_PHRASES = [
+  'את לא עוזרת',
+  'אתה לא עוזר',
+  'הבוט לא עוזר',
+  'לא מבין אותי',
+  'לא מבינה אותי',
+  'את לא מבינה',
+  'אתה לא מבין',
+  'תפסיקי לשאול',
+  'תפסיק לשאול',
+  'שאלות טיפשיות',
+  'חוזרת על עצמך',
+  'חוזר על עצמך',
+  'כבר אמרתי',
+  'כבר הסברתי',
+  'זה לא מה ששאלתי',
+  'לא עונה לי',
+  'לא עונה על השאלה',
+  'זה לא רלוונטי למה שאמרתי',
+  'את בוט',
+  'אתה בוט',
+  'דברי כמו בן אדם',
+  'תדבר כמו בן אדם',
+  'מרגיש כמו רובוט',
+  'שיחה עם קיר',
+];
+
+const META_FEEDBACK_WORD_TRIGGERS = [
+  'רובוט',
+  'בוט',
+];
+
+/**
+ * RC3: Detect if user is giving feedback about the bot itself
+ * (not about their relationship). These messages need different handling.
+ */
+export function detectMetaFeedback(userMessage: string): boolean {
+  const normalized = userMessage.trim();
+
+  if (META_FEEDBACK_PHRASES.some((phrase) => normalized.includes(phrase))) {
+    return true;
+  }
+
+  const words = normalized.split(/[\s,.\-!?;:]+/).filter((w) => w.length > 0);
+  return META_FEEDBACK_WORD_TRIGGERS.some((trigger) =>
+    words.includes(trigger) && (normalized.includes('לא') || normalized.includes('אל'))
+  );
+}
+
+// ============================================
 // Frustration Detection
 // ============================================
 
@@ -235,19 +290,22 @@ export function getUserTurnCount(history: ConversationMessage[], currentRole: st
   return history.filter((m) => m.role === currentRole).length;
 }
 
+// RC4: Emotion/content indicators that suggest user has shared enough to draft
+const EMOTION_INDICATORS = /מרגיש|מפחד|כואב|עצוב|בודד|נפגע|כעוס|מאוכזב|פוחד|חוששת|לב שלי|קשה לי|שבור|עייף|נשבר|מתביישת|אשמה|חסר לי/;
+const EVENT_INDICATORS = /אמר לי|עשה|עשתה|קרה|היה|אמרה|הייתי|אתמול|היום|בבוקר|בלילה|כשהוא|כשהיא|כש/;
+
 /**
  * Determine if Ruth should generate a message draft instead of continuing intake.
- * Triggers at turn 5+ or when user provides clear event + goal.
+ *
+ * RC4 FIX: Content-aware — requires BOTH an event AND emotional content
+ * before drafting. Pure turn count alone triggers only at turn 8 (hard cap).
+ * This prevents premature drafting when user only shared surface-level info.
  */
 export function shouldGenerateDraft(
   turnCount: number,
   conversationHistory: ConversationMessage[],
   currentRole: string
 ): boolean {
-  // Always draft by turn 5
-  if (turnCount >= 4) return true;
-
-  // Check if user already provided enough info (event + goal in their messages)
   const userMessages = conversationHistory
     .filter((m) => m.role === currentRole)
     .map((m) => m.content)
@@ -255,8 +313,23 @@ export function shouldGenerateDraft(
 
   const hasSubstantialContent = userMessages.length > 100;
   const hasMentionedGoal = /רוצה|צריך|חשוב לי|מבקש|אני מקווה/i.test(userMessages);
+  const hasEmotionalContent = EMOTION_INDICATORS.test(userMessages);
+  const hasEventContent = EVENT_INDICATORS.test(userMessages);
 
-  // Draft early if user gave clear content + goal
+  // Hard cap: always draft by turn 8 (avoidant delay from systemPrompts)
+  if (turnCount >= 7) return true;
+
+  // Content-ready: user shared both event + emotion + goal — draft at turn 4+
+  if (turnCount >= 3 && hasSubstantialContent && hasEmotionalContent && (hasMentionedGoal || hasEventContent)) {
+    return true;
+  }
+
+  // Soft trigger: turn 5+ with event OR emotion (not just turn count)
+  if (turnCount >= 4 && hasSubstantialContent && (hasEmotionalContent || hasEventContent)) {
+    return true;
+  }
+
+  // Early trigger: turn 3+ with clear goal + content
   if (turnCount >= 3 && hasSubstantialContent && hasMentionedGoal) {
     return true;
   }
