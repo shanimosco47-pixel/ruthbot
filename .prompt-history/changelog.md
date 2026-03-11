@@ -162,3 +162,41 @@ Real Telegram conversation revealed multiple bugs:
 - `callbackHandler.ts`: `handleReframeApprove` — mark delivered only AFTER send
 - `callbackHandler.ts`: `deliverToPartner` → returns boolean, handles missing partner
 - `callbackHandler.ts`: `handleConsentAccept` — delivers queued approved reframes when User B joins
+
+---
+
+## Change #005 — 2026-03-09 (Clarity & Error Fallback Fix)
+**Issue:** User said "לא הבנתי" and got error + crisis resources | **Backup:** `systemPrompts_2026-03-09_clarity_fix.ts`
+
+### Diff 1: `buildCombinedRiskCoachingPrompt()` — STEP 1 Confused handler
+
+**Before:**
+```
+□ Confused? → Summarize what you heard, clarify
+```
+
+**After:**
+```
+□ Confused / didn't understand your question? → Rephrase in SIMPLE everyday Hebrew. Don't repeat the same question. Don't treat confusion as an emotion to explore. If they said "לא הבנתי" — say it differently, shorter, simpler. Example: instead of "מה הכעס הזה מכוון אליו?" say "על מי את/ה כועס/ת?" or "מה גרם לכעס?"
+```
+
+### Diff 2: Anti-pattern added (both combined + standalone prompts)
+
+**Added:**
+```
+❌ Use formal/literary Hebrew that sounds unnatural in conversation. WRONG: "מה הכעס הזה מכוון אליו?", "מה עומד מאחורי התחושה?". RIGHT: "על מי את כועסת?", "מה גרם לכעס?", "מה קרה?"
+```
+
+### Diff 3: `riskEngine.ts` — API failure fallback message (NOT a prompt change)
+
+**Before:**
+```
+coaching: 'אירעה שגיאה זמנית. ספר/י לי מה קורה — אני כאן.\n\nאם את/ה במצוקה, אפשר לפנות לער"ן (עזרה ראשונה נפשית): 1201',
+```
+
+**After:**
+```
+coaching: 'סליחה, נתקלתי בבעיה טכנית רגעית. אפשר לנסות שוב — אני כאן.',
+```
+
+**Reasoning:** Crisis resources (ער"ן 1201) should only appear on genuine L4 safety triggers — NOT on API timeouts/failures. Showing crisis numbers on a technical error confuses users and trivializes emergency resources.

@@ -2,8 +2,8 @@ import crypto from 'crypto';
 import { env } from '../config/env';
 
 // AES-256-GCM: Authenticated encryption (AEAD) — provides integrity + confidentiality
-const ALGORITHM_GCM = 'aes-256-gcm';
-const GCM_IV_LENGTH = 12; // NIST recommended IV length for GCM
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // NIST recommended IV length for GCM
 const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag
 
 // Legacy CBC support for decrypting old data (pre-migration)
@@ -14,8 +14,8 @@ function getKey(): Buffer {
 }
 
 export function encrypt(text: string): string {
-  const iv = crypto.randomBytes(GCM_IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   const authTag = cipher.getAuthTag().toString('hex');
@@ -31,14 +31,28 @@ export function decrypt(encryptedText: string): string {
       throw new Error('Invalid GCM encrypted text format');
     }
     const [, ivHex, authTagHex, ...encryptedParts] = parts;
-    const encrypted = encryptedParts.join(':'); // rejoin in case ciphertext contained ':'
+    const encrypted = encryptedParts.join(':');
     if (!ivHex || !authTagHex) {
       throw new Error('Invalid GCM encrypted text format');
     }
-    // Note: encrypted can be empty string for empty plaintext — that's valid for GCM
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
+
+  if (encryptedText.split(':').length === 3) {
+    // Legacy GCM format: iv:encrypted:authTag (no prefix)
+    const [ivHex, encrypted, authTagHex] = encryptedText.split(':');
+    if (!ivHex || encrypted === undefined || !authTagHex) {
+      throw new Error('Invalid encrypted text format');
+    }
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv) as crypto.DecipherGCM;
     decipher.setAuthTag(authTag);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
@@ -59,7 +73,6 @@ export function decrypt(encryptedText: string): string {
 
 /**
  * Derive a separate HMAC key from the AES key to avoid key reuse.
- * Using the same key for both AES-CBC and HMAC weakens both operations.
  */
 function getHmacKey(): Buffer {
   return crypto.createHash('sha256').update(Buffer.concat([getKey(), Buffer.from('hmac-key-derivation')])).digest();

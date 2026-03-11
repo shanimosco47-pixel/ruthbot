@@ -50,13 +50,13 @@ export async function classifyRisk(params: {
         raw: JSON.stringify(raw).substring(0, 500),
       });
 
-      // SAFETY: Fallback to L3_PLUS (restrictive), NOT L2 (permissive) — a threatening
-      // message with malformed JSON must not be classified as safe.
+      // SAFETY: On invalid output, assume worst case — NOT permissive L2.
+      // L3_PLUS prevents reframing and includes professional referral resources.
       return {
         risk_level: 'L3_PLUS',
         topic_category: FALLBACK_TOPIC_CATEGORY,
-        action_required: 'Manual review — Risk Engine returned invalid format, restrictive classification applied',
-        reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — L3_PLUS for safety',
+        action_required: 'URGENT: Risk Engine returned invalid format — manual review required',
+        reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — classified as L3_PLUS for safety',
       };
     }
 
@@ -213,7 +213,7 @@ export async function classifyRiskAndCoach(params: {
         action_required: 'URGENT: Combined risk+coaching failed — manual review required',
         reasoning: 'Automatic RESTRICTIVE fallback due to API failure — classified as L3_PLUS for safety',
       },
-      coaching: 'אירעה שגיאה זמנית. ספר/י לי מה קורה — אני כאן.\n\nאם את/ה במצוקה, אפשר לפנות לער"ן (עזרה ראשונה נפשית): 1201',
+      coaching: 'סליחה, נתקלתי בבעיה טכנית רגעית. אפשר לנסות שוב — אני כאן.',
     };
   }
 }
