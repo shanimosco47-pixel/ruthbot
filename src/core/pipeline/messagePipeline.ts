@@ -8,6 +8,7 @@ import { logger } from '../../utils/logger';
 import { encrypt, decrypt } from '../../utils/encryption';
 import {
   detectFrustration,
+  detectMetaFeedback,
   getFrustrationMenu,
   getUserTurnCount,
   shouldGenerateDraft,
@@ -60,12 +61,14 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   // ================================================
   const turnCount = getUserTurnCount(conversationHistory, context.currentRole);
   const isFrustrated = detectFrustration(rawText);
+  const isMetaFeedback = detectMetaFeedback(rawText);
   const shouldDraft = shouldGenerateDraft(turnCount, conversationHistory, context.currentRole);
 
   logger.info('RUTH V3 state', {
     sessionId: context.sessionId,
     turnCount,
     isFrustrated,
+    isMetaFeedback,
     shouldDraft,
   });
 
@@ -131,6 +134,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     turnCount,
     shouldDraft,
     isFrustrated,
+    isMetaFeedback,
   });
 
   // Store user message (await with retry — message loss is unacceptable for mediation)
@@ -190,6 +194,8 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
           topicCategory: riskAssessment.topic_category,
           originalMessage: rawText,
           conversationContext,
+          senderRole: context.currentRole,
+          sessionMode: context.status === 'ASYNC_COACHING' ? 'SOLO' : 'COUPLE',
         }),
         userMessage: rawText,
         sessionId: context.sessionId,

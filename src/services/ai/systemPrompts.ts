@@ -58,8 +58,9 @@ export function buildCombinedRiskCoachingPrompt(params: {
   turnCount?: number;
   shouldDraft?: boolean;
   isFrustrated?: boolean;
+  isMetaFeedback?: boolean;
 }): SplitSystemPrompt {
-  const { userRole, language, conversationHistory, patternSummaries, sessionId, sessionStatus, turnCount = 0, shouldDraft = false, isFrustrated = false } = params;
+  const { userRole, language, conversationHistory, patternSummaries, sessionId, sessionStatus, turnCount = 0, shouldDraft = false, isFrustrated = false, isMetaFeedback = false } = params;
 
   const topicList = TOPIC_CATEGORIES.map((c) => `"${c}"`).join(', ');
   const langInstruction = getLanguageInstruction(language);
@@ -67,7 +68,7 @@ export function buildCombinedRiskCoachingPrompt(params: {
   const patternsStr = patternSummaries.length > 0
     ? patternSummaries.map((s, i) => `Pattern ${i + 1}: ${s}`).join('\n')
     : 'No previous patterns available.';
-  const phaseInstruction = getPhaseInstruction(turnCount, shouldDraft, isFrustrated);
+  const phaseInstruction = getPhaseInstruction(turnCount, shouldDraft, isFrustrated, isMetaFeedback);
 
   // Static part: instructions, rules, methodology — identical across all calls.
   // Cached by Anthropic for ~90% input token savings on cache hits (5-min TTL).
@@ -505,7 +506,12 @@ OUTPUT FORMAT:
 /**
  * Get phase-specific instruction based on turn count and state.
  */
-function getPhaseInstruction(turnCount: number, shouldDraft: boolean, isFrustrated: boolean): string {
+function getPhaseInstruction(turnCount: number, shouldDraft: boolean, isFrustrated: boolean, isMetaFeedback: boolean = false): string {
+  // RC3: User is talking about the bot, not their relationship
+  if (isMetaFeedback) {
+    return 'META-FEEDBACK DETECTED — The user is complaining about YOU (the bot), NOT about their partner. Do NOT treat this as relationship content. Acknowledge their frustration with you directly: "צודק/ת, אני אנסה אחרת." Then adjust your approach: ask a different kind of question, or offer a concrete action. Keep it under 30 words. Do NOT psychoanalyze their feedback.';
+  }
+
   if (isFrustrated) {
     return 'FRUSTRATION DETECTED — Do NOT ask therapy questions. Offer 3 concrete options: (1) short apology, (2) boundary statement, (3) future rule. Ask which one. Keep it under 30 words.';
   }
@@ -534,9 +540,19 @@ export function buildReframePrompt(params: {
   topicCategory: TopicCategory;
   originalMessage: string;
   conversationContext: string;
+  senderRole?: 'USER_A' | 'USER_B';
+  sessionMode?: string;
 }): string {
-  const { language, topicCategory, originalMessage, conversationContext } = params;
+  const { language, topicCategory, originalMessage, conversationContext, senderRole, sessionMode } = params;
   const langInstruction = getLanguageInstruction(language);
+
+  // RC1 FIX: Provide explicit sender/receiver context so Claude knows
+  // who wrote this message and who will read the reframe.
+  const senderLabel = senderRole === 'USER_B' ? 'User B (the partner who joined)' : 'User A (the partner who started the session)';
+  const receiverLabel = senderRole === 'USER_B' ? 'User A' : 'User B';
+  const directionContext = senderRole
+    ? `\nSENDER: ${senderLabel}\nRECEIVER: ${receiverLabel} — the reframe will be shown to them.\nSESSION MODE: ${sessionMode || 'COUPLE'}\n`
+    : '';
 
   return `ROLE:
 You are Ruth's (רות בוט זוגיות) reframe engine. Your job is to take a partner's raw message and transform it into a version that:
@@ -544,11 +560,12 @@ You are Ruth's (רות בוט זוגיות) reframe engine. Your job is to take 
 2. Removes blame, criticism, contempt, and accusations
 3. Uses I-statements and needs-based language
 4. Feels authentic — not robotic or clinical
-
+${directionContext}
 METHODOLOGY:
 - Apply EFT: Surface the primary emotion (fear, loneliness, need for recognition) beneath the secondary emotion (anger, frustration, sarcasm).
 - Apply Gottman: Replace any of the Four Horsemen with soft startup language.
 - The reframe should feel like what the person MEANT to say, not what they actually said.
+- Write from the SENDER's perspective (first person). Use pronouns that match the sender, not the receiver.
 
 TOPIC CONTEXT: ${topicCategory}
 
@@ -564,6 +581,7 @@ RULES:
 3. Do not take sides or validate one partner over the other.
 4. Keep it natural and conversational — not therapeutic jargon.
 5. The receiving partner should feel invited to respond, not attacked.
+6. Write in FIRST PERSON — as if the sender is speaking. The reframe replaces their words, not yours.
 
 LANGUAGE:
 ${langInstruction}

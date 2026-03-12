@@ -9,6 +9,7 @@ import { logger } from '../../../utils/logger';
 import { splitMessage } from '../../../utils/telegramHelpers';
 import { decrypt, encrypt } from '../../../utils/encryption';
 import { prisma } from '../../../db/client';
+import { trackedReply, logBotMessage } from '../../../utils/trackedReply';
 import { MAX_EDIT_ITERATIONS } from '../../../config/constants';
 import { getMessageTemplate } from '../../../utils/responseValidator';
 import type { MessageTemplate } from '../../../utils/responseValidator';
@@ -212,13 +213,11 @@ async function handleOnboardingChoice(ctx: Context, telegramId: string, data: st
     // Transition to ASYNC_COACHING
     await SessionStateMachine.transition(sessionId, 'ASYNC_COACHING', { reason: 'user_chose_solo' });
 
-    // RULE 0: First message MUST be the intake template
-    await ctx.reply(
-      `שלום! אני רות, מנחה זוגי.
-בואו נתחיל בתלוש (משפט אחד לכל שאלה):
-1️⃣ מה קרה?
-2️⃣ מה אתה רוצה שיקרה בסוף?
-3️⃣ מה אסור שיקרה?`
+    // RULE 0: First message — conversational opening (RC2: no rigid form)
+    await trackedReply(
+      ctx,
+      'שלום! אני רות, מנחה זוגי 🙂\n\nספר/י לי — מה קרה?',
+      { sessionId, senderRole: 'USER_A' }
     );
 
     await safeSetUserState(telegramId, { state: 'coaching', sessionId }, 'solo-onboarding');
@@ -429,8 +428,10 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
     }
 
     // Deliver the reframe FIRST, then mark as delivered (Section 2.5, Phase 3, 3A)
-    await ctx.reply(
-      `בן/בת הזוג שלך ביקש/ה להעביר לך את הדברים הבאים. ביקשתי ממנו/ממנה לנסח אותם בצורה שתאפשר לכם לדבר בצורה רגועה:\n\n— ${reframedText} —`
+    await trackedReply(
+      ctx,
+      `בן/בת הזוג שלך ביקש/ה להעביר לך את הדברים הבאים. ביקשתי ממנו/ממנה לנסח אותם בצורה שתאפשר לכם לדבר בצורה רגועה:\n\n— ${reframedText} —`,
+      { sessionId, senderRole: 'USER_B' }
     );
 
     // Only mark as delivered AFTER successful send to User B
@@ -446,13 +447,17 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 
   // Start Reflection Gate with emotional intake for User B
   if (reframedText) {
-    await ctx.reply(
-      'לפני שנגיב — מה הדבר הראשון שאתה מרגיש כשאתה קורא את זה?'
+    await trackedReply(
+      ctx,
+      'לפני שנגיב — מה הדבר הראשון שאתה מרגיש כשאתה קורא את זה?',
+      { sessionId, senderRole: 'USER_B' }
     );
   } else {
     // No reframe to show — start User B intake
-    await ctx.reply(
-      'שלום! אני רות. בן/בת הזוג שלך פתח/ה את הסשן הזה כי חשוב לו/לה לדבר.\n\nאיך את/ה מרגיש/ה לגבי זה?'
+    await trackedReply(
+      ctx,
+      'שלום! אני רות. בן/בת הזוג שלך פתח/ה את הסשן הזה כי חשוב לו/לה לדבר.\n\nאיך את/ה מרגיש/ה לגבי זה?',
+      { sessionId, senderRole: 'USER_B' }
     );
   }
 
@@ -501,11 +506,11 @@ async function handleReframeApprove(ctx: Context, telegramId: string, data: stri
       data: { delivered: true },
     });
     await deletePendingReframe(messageId);
-    await ctx.reply('✅ ההודעה נשלחה לבן/בת הזוג.');
+    await trackedReply(ctx, '✅ ההודעה נשלחה לבן/בת הזוג.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
   } else {
     // Partner not yet in session — message queued for delivery when they join
     await deletePendingReframe(messageId);
-    await ctx.reply('✅ ההודעה אושרה ותישלח ברגע שבן/בת הזוג יצטרף/תצטרף לסשן.');
+    await trackedReply(ctx, '✅ ההודעה אושרה ותישלח ברגע שבן/בת הזוג יצטרף/תצטרף לסשן.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
   }
 }
 
@@ -553,9 +558,8 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
   const messageId = parts[1];
   await deletePendingReframe(messageId);
 
-  await ctx.reply('ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.');
-
   const currentState = await getUserState(telegramId);
+  await trackedReply(ctx, 'ההודעה בוטלה. הסשן ממשיך — אתה יכול להמשיך לדבר.', { sessionId: currentState?.sessionId });
   await safeSetUserState(telegramId, {
     state: 'coaching',
     sessionId: currentState?.sessionId,
@@ -727,6 +731,10 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
     for (const chunk of splitMessage(deliveryMessage)) {
       await ctx.telegram.sendMessage(recipientTelegramId, chunk);
     }
+
+    // RC0: Log the delivered message in the recipient's context
+    const recipientRole = pending.senderRole === 'USER_A' ? 'USER_B' : 'USER_A';
+    await logBotMessage(pending.sessionId, deliveryMessage, recipientRole as 'USER_A' | 'USER_B');
 
     logger.info('Reframed message delivered to partner', {
       sessionId: pending.sessionId,

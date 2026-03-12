@@ -8,12 +8,14 @@ import { logger } from '../../../utils/logger';
 import { detectLanguage, splitMessage } from '../../../utils/telegramHelpers';
 import { prisma } from '../../../db/client';
 import { encrypt, decrypt } from '../../../utils/encryption';
+import { trackedReply } from '../../../utils/trackedReply';
 import { MAX_REFLECTION_REPROMPTS } from '../../../config/constants';
 import { env } from '../../../config/env';
 import { sendSessionSummaryEmail } from '../../../services/email/emailService';
 import {
   getUserState, setUserState, deleteUserState,
   getPendingReframe, setPendingReframe,
+  invalidateOldPendingReframes,
 } from '../../../utils/stateStore';
 import type { UserFlowState } from '../../../utils/stateStore';
 import type { MirrorEvaluation, SessionContext, PendingReframe } from '../../../types';
@@ -308,8 +310,10 @@ async function handleReflectionStep1(
   }
 
   // Proceed to Mirror step
-  await ctx.reply(
-    'תודה ששיתפת ❤️\n\nעכשיו, האם תוכל/י לשקף במילים שלך מה הבנת שחשוב לבן/בת הזוג שלך?'
+  await trackedReply(
+    ctx,
+    'תודה ששיתפת ❤️\n\nעכשיו, האם תוכל/י לשקף במילים שלך מה הבנת שחשוב לבן/בת הזוג שלך?',
+    { sessionId: state.sessionId, senderRole: 'USER_B' }
   );
 
   await setUserState(telegramId, {
@@ -375,8 +379,10 @@ async function handleReflectionMirror(
     }
 
     // Proceed to Empathy Bridge
-    await ctx.reply(
-      'תודה ששיקפת 🙏\n\nעכשיו הבוט יעזור לך לנסח את התגובה שלך — גם אתה זכאי/ת להישמע.'
+    await trackedReply(
+      ctx,
+      'תודה ששיקפת 🙏\n\nעכשיו הבוט יעזור לך לנסח את התגובה שלך — גם אתה זכאי/ת להישמע.',
+      { sessionId: state.sessionId, senderRole: 'USER_B' }
     );
 
     await setUserState(telegramId, { state: 'coaching', sessionId: state.sessionId });
@@ -428,17 +434,18 @@ async function handleActiveSessionMessage(
 
     // Send coaching response (with buttons for frustration)
     if (result.isFrustrationMenu) {
-      await ctx.reply(
-        result.coachingResponse,
-        Markup.inlineKeyboard([
+      await trackedReply(ctx, result.coachingResponse, {
+        sessionId: sessionContext.sessionId,
+        senderRole: sessionContext.currentRole,
+        extra: Markup.inlineKeyboard([
           [Markup.button.callback('🙏 התנצלות', `frustration:apology:${sessionContext.sessionId}`)],
           [Markup.button.callback('🛑 גבול', `frustration:boundary:${sessionContext.sessionId}`)],
           [Markup.button.callback('📏 כלל לעתיד', `frustration:future_rule:${sessionContext.sessionId}`)],
-        ])
-      );
+        ]),
+      });
     } else {
       for (const chunk of splitMessage(result.coachingResponse)) {
-        await ctx.reply(chunk);
+        await trackedReply(ctx, chunk, { sessionId: sessionContext.sessionId, senderRole: sessionContext.currentRole });
       }
     }
 
@@ -467,17 +474,20 @@ async function handleActiveSessionMessage(
         messageId: message.id,
       };
 
+      // RC5: Invalidate any old pending reframes for this user+session before creating new one
+      await invalidateOldPendingReframes(sessionContext.sessionId, telegramId);
       await setPendingReframe(message.id, pending);
 
       // Show reframe with approval buttons (Rule 2)
-      await ctx.reply(
-        `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`,
-        Markup.inlineKeyboard([
+      await trackedReply(ctx, `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`, {
+        sessionId: sessionContext.sessionId,
+        senderRole: sessionContext.currentRole,
+        extra: Markup.inlineKeyboard([
           [Markup.button.callback('✅ שלח כפי שזה', `reframe_approve:${message.id}`)],
           [Markup.button.callback('✏️ אני רוצה לערוך', `reframe_edit:${message.id}`)],
           [Markup.button.callback('❌ בטל / אל תשלח', `reframe_cancel:${message.id}`)],
-        ])
-      );
+        ]),
+      });
     }
 
     if (result.halted) {
@@ -539,17 +549,18 @@ async function handleCoachingMessage(
 
     // Frustration menu — show with inline buttons
     if (result.isFrustrationMenu) {
-      await ctx.reply(
-        result.coachingResponse,
-        Markup.inlineKeyboard([
+      await trackedReply(ctx, result.coachingResponse, {
+        sessionId,
+        senderRole: session?.role || 'USER_A',
+        extra: Markup.inlineKeyboard([
           [Markup.button.callback('🙏 התנצלות', `frustration:apology:${sessionId}`)],
           [Markup.button.callback('🛑 גבול', `frustration:boundary:${sessionId}`)],
           [Markup.button.callback('📏 כלל לעתיד', `frustration:future_rule:${sessionId}`)],
-        ])
-      );
+        ]),
+      });
     } else {
       for (const chunk of splitMessage(result.coachingResponse)) {
-        await ctx.reply(chunk);
+        await trackedReply(ctx, chunk, { sessionId, senderRole: session?.role || 'USER_A' });
       }
     }
 
@@ -577,16 +588,19 @@ async function handleCoachingMessage(
         messageId: message.id,
       };
 
+      // RC5: Invalidate any old pending reframes for this user+session before creating new one
+      await invalidateOldPendingReframes(sessionId, telegramId);
       await setPendingReframe(message.id, pendingItem);
 
-      await ctx.reply(
-        `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`,
-        Markup.inlineKeyboard([
+      await trackedReply(ctx, `📝 הנה ניסוח מוצע לשליחה לבן/בת הזוג:\n\n${result.reframedMessage}`, {
+        sessionId,
+        senderRole: session?.role || 'USER_A',
+        extra: Markup.inlineKeyboard([
           [Markup.button.callback('✅ שלח כפי שזה', `reframe_approve:${message.id}`)],
           [Markup.button.callback('✏️ אני רוצה לערוך', `reframe_edit:${message.id}`)],
           [Markup.button.callback('❌ בטל / אל תשלח', `reframe_cancel:${message.id}`)],
-        ])
-      );
+        ]),
+      });
     }
   } catch (error) {
     logger.error('Coaching message error', {
