@@ -1,23 +1,46 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-03-10 (V3.2 comprehensive code review — encryption, safety, authorization, race conditions)
+> Last updated: 2026-03-13 (V3.3 — PR #5-#8 merged, conversation quality fixes deployed)
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V3.2 — COMPREHENSIVE SECURITY REVIEW APPLIED 🔶
+## Current Status: RUTH V3.3 — DEPLOYED & LIVE ✅
 
-The bot is **live in production** on Render free tier (webhook mode) — currently running **V2.3**.
-V3.1 code (V3 + code review fixes) is local — needs push to GitHub + manual Render deploy.
+The bot is **live in production** on Render free tier (webhook mode) — running **V3.3**.
+All PRs (#1-#8) merged to master. Latest deploy includes all conversation quality fixes.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
-- **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **Last GitHub commit:** `34f4306` (V3 reframe delivery fix)
-- **Last Render deploy:** 2026-02-28 — Commit `de076fe` — still running V2.3
-- **⚡ TO DEPLOY V3.1:** Commit review fixes → `git push` → Render "Manual Deploy" → "Deploy latest commit"
+- **Keep-alive:** Self-ping built into app + UptimeRobot pings /health every 5 min
+- **Last GitHub commit:** `80b04b1` (Merge PR #8 — chat logger + conversation fixes)
+- **Last Render deploy:** 2026-03-13 — Commit `80b04b1` — running V3.3
 - **V2 Training score:** 44 → 90.3 across 13 training runs
 - **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
+
+### RUTH V3.3 Conversation Quality & Infrastructure (2026-03-13)
+- **Merged PRs:** #5, #6, #7, #8 — all merged to master and deployed
+- **PR #5 — Error handling:** Prevent "אירעה שגיאה" after coaching questions (`setUserState` non-throwing)
+- **PR #6 — Build fix + double-click:** `prisma db push` added to Render build, double-click button crash prevention
+- **PR #7 — 6 root causes fixed:**
+  - Message logging: conversations now properly logged
+  - Reframe context: fixed missing context in reframes
+  - Intake flow: corrected intake behavior
+  - Meta-feedback: proper handling of meta-questions
+  - Draft trigger: fixed premature draft triggering
+  - Stale buttons: cleaned up stale inline keyboard buttons
+- **PR #8 — Conversation analysis & UX fixes:**
+  - Added human-readable chat logger (`logs/chat.log`) for conversation analysis
+  - Added auto-read instruction for chat.log in CLAUDE.md
+  - Fixed confusing "partner will join" confirmation after reframe approval
+  - Skip reframe when coaching asks a question, fix Hebrew grammar
+  - Fix premature reframing, meta-question handling, confusing session explanations
+- **Infrastructure:** Self-ping keep-alive added (no longer relies solely on UptimeRobot)
+- **State persistence:** `pendingReframes` and `userStates` moved from in-memory Maps to DB
+- **Timeouts:** Claude API timeout reduced 30s → 10s with friendly fallback
+- **Health check:** Now includes DB probe
+- **Webhook:** Rate limiting added
+- **Version:** Updated to 3.3.0
 
 ### RUTH V3.2 Comprehensive Security Review (2026-03-10)
 - **CRITICAL — Encryption upgraded:** AES-256-CBC → AES-256-GCM (authenticated encryption)
@@ -371,8 +394,8 @@ Same as `.env` with:
 3. ~~**RUTH V2 fine-tuning**~~ — ✅ DONE (V2.3/V2.4 training score: 90.3)
 4. ~~**Deploy V2.4**~~ — ✅ DONE (2026-02-28, commit `de076fe`)
 5. ~~**Architecture fix + session close bug**~~ — ✅ DONE (V2.5, commits `d898342` + pending)
-6. **Deploy V2.5** — Push + deploy on Render
-7. **Continue training** — Run trainer_bot to validate V2.5 fixes (especially couple_full_flow)
+6. ~~**Deploy V3.3**~~ — ✅ DONE (2026-03-13, PR #8 merged, commit `80b04b1`)
+7. **Continue training** — Run trainer_bot to validate V3.3 fixes (especially couple_full_flow)
 8. **Stripe setup** — Need non-Israel entity or alternative processor (code gracefully bypasses)
    - **Alternatives:** Lemon Squeezy (international), PayPlus/Tranzila (Israeli processors), Paddle
 9. **Resend email setup** — Sign up, get key, verify domain (code gracefully skips when not configured)
@@ -397,9 +420,9 @@ Same as `.env` with:
 
 ## Git State
 - **Branch:** master
-- **Last commit:** `34f4306` — fix: reframe delivery pipeline + clinical prompt improvements
-- **Previous commits:** `7aff470` (v3.0 health), `e9c170c` (V3 prompt), `2dd7be5` (idle reminder fix), `5fd587f` (summary mid-flow fix)
-- **All 12 phases committed and merged + V2 → V3.1 iterations**
+- **Last commit:** `80b04b1` — Merge PR #8 (chat logger + conversation quality fixes)
+- **Total PRs merged:** 8 (all merged to master)
+- **All 12 phases committed and merged + V2 → V3.3 iterations**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
 
