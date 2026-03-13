@@ -323,7 +323,7 @@ Return ONLY valid JSON (no markdown code blocks):
 PHASE: ${phaseInstruction}
 
 SESSION: ${sessionId} | User: ${userRole}
-${sessionStatus === 'ASYNC_COACHING' ? 'MODE: SOLO — help craft message, suggest inviting partner when appropriate. Explain: partner gets their own SEPARATE private chat.' : 'MODE: COUPLE — each partner in SEPARATE private chat. Mediate between them. Deliver approved messages.'}
+${sessionStatus === 'ASYNC_COACHING' ? 'MODE: SOLO COACHING — You are coaching this user privately. The partner is NOT part of this conversation and CANNOT join this chat. Each partner has their OWN separate private chat with you. Help the user explore their feelings and craft what they want to say. When they are ready, they can invite the partner — the partner will get a SEPARATE private chat link.' : 'MODE: COUPLE — each partner in their OWN SEPARATE private chat with you. They NEVER see each other\'s messages. You mediate between them. Deliver only approved messages.'}
 ARCHITECTURE: Two SEPARATE private chats. NO group. NO shared chat. NEVER say "קבוצה משותפת" or "תהיו יחד".
 
 History:
@@ -331,7 +331,7 @@ ${historyStr}
 
 Patterns: ${patternsStr}
 
-GUARDRAILS: No raw forwarding. No surfacing past conflicts unless relevant. No diagnosing. Help communicate, don't solve. ${sessionStatus === 'ASYNC_COACHING' ? 'Partner not joined — help craft, suggest inviting.' : 'Partner connected — deliver approved messages.'} NEVER refuse to mediate.
+GUARDRAILS: No raw forwarding. No surfacing past conflicts unless relevant. No diagnosing. Help communicate, don't solve. ${sessionStatus === 'ASYNC_COACHING' ? 'Partner has their own SEPARATE chat — they are NOT in this conversation. Help craft messages here, suggest inviting when appropriate.' : 'Partner is in a SEPARATE private chat — deliver approved messages between them.'} NEVER refuse to mediate.
 
 LANGUAGE: ${langInstruction}`;
 
@@ -479,7 +479,7 @@ ${historyStr}
 Patterns from previous sessions:
 ${patternsStr}
 
-SESSION MODE: ${sessionStatus === 'ASYNC_COACHING' ? 'SOLO COACHING — User is working alone. Help them craft what they want to say. When the moment is right, suggest inviting the partner. Explain: "בן/בת הזוג יקבל/תקבל צ\'אט פרטי נפרד איתי. אף אחד לא רואה מה השני כותב. אני המתווכת ביניכם."' : 'COUPLE MEDIATION — Each partner has their OWN SEPARATE private chat with you. Help craft messages, reframe with empathy, deliver approved versions.'}
+SESSION MODE: ${sessionStatus === 'ASYNC_COACHING' ? 'SOLO COACHING — You are coaching this user privately. The partner is NOT in this conversation. Each partner has their OWN separate private chat with you — they NEVER see each other\'s messages. Help the user explore their feelings and craft what they want to say. When they are ready, they can invite the partner to open a SEPARATE private chat.' : 'COUPLE MEDIATION — Each partner has their OWN SEPARATE private chat with you. They NEVER see each other\'s messages. Help craft messages, reframe with empathy, deliver approved versions.'}
 
 CHAT ARCHITECTURE — CRITICAL:
 - Each partner talks to you in a SEPARATE, PRIVATE chat. No shared chat. No group.
@@ -509,7 +509,7 @@ OUTPUT FORMAT:
 function getPhaseInstruction(turnCount: number, shouldDraft: boolean, isFrustrated: boolean, isMetaFeedback: boolean = false): string {
   // RC3: User is talking about the bot, not their relationship
   if (isMetaFeedback) {
-    return 'META-FEEDBACK DETECTED — The user is complaining about YOU (the bot), NOT about their partner. Do NOT treat this as relationship content. Acknowledge their frustration with you directly: "צודק/ת, אני אנסה אחרת." Then adjust your approach: ask a different kind of question, or offer a concrete action. Keep it under 30 words. Do NOT psychoanalyze their feedback.';
+    return 'META-FEEDBACK DETECTED — The user is talking about YOU (the bot) or asking how the system works — NOT about their relationship. Do NOT treat this as relationship content. Do NOT generate a reframe or draft. If they are confused about how you work, explain clearly and briefly: "כל אחד מדבר איתי בצ\'אט פרטי נפרד. אף אחד לא רואה מה השני כותב. אני עוזרת לנסח ומעבירה רק מה שאושר." If they are complaining about you, acknowledge: "צודק/ת, אני אנסה אחרת." Keep it under 30 words. Do NOT psychoanalyze their feedback.';
   }
 
   if (isFrustrated) {
@@ -548,7 +548,7 @@ export function buildReframePrompt(params: {
 
   // RC1 FIX: Provide explicit sender/receiver context so Claude knows
   // who wrote this message and who will read the reframe.
-  const senderLabel = senderRole === 'USER_B' ? 'User B (the partner who joined)' : 'User A (the partner who started the session)';
+  const senderLabel = senderRole === 'USER_B' ? 'User B (the partner who was invited)' : 'User A (the partner who initiated)';
   const receiverLabel = senderRole === 'USER_B' ? 'User A' : 'User B';
   const directionContext = senderRole
     ? `\nSENDER: ${senderLabel}\nRECEIVER: ${receiverLabel} — the reframe will be shown to them.\nSESSION MODE: ${sessionMode || 'COUPLE'}\n`

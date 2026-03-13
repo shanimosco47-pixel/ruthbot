@@ -179,7 +179,8 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   let requiresApproval = false;
 
   const shouldGenerateReframe =
-    (context.status === 'ACTIVE' && context.userBId) || shouldDraft;
+    !isMetaFeedback &&
+    ((context.status === 'ACTIVE' && context.userBId) || shouldDraft);
 
   if (shouldGenerateReframe) {
     if (riskAssessment.risk_level === 'L1' || riskAssessment.risk_level === 'L2') {
