@@ -217,7 +217,6 @@ const META_FEEDBACK_PHRASES = [
   'להצטרף לסשיין',
   'מי אמור',
   'מי אמורה',
-  'טעות',
 ];
 
 const META_FEEDBACK_WORD_TRIGGERS = [
