@@ -18,6 +18,7 @@ import {
   invalidateOldPendingReframes,
 } from '../../../utils/stateStore';
 import type { UserFlowState } from '../../../utils/stateStore';
+import { logUserMessage, logBotCoaching, logReframe } from '../../../utils/chatLogger';
 import type { MirrorEvaluation, SessionContext, PendingReframe } from '../../../types';
 import type { TopicCategory } from '../../../config/constants';
 
@@ -424,6 +425,15 @@ async function handleActiveSessionMessage(
 ): Promise<void> {
   await ctx.sendChatAction('typing');
 
+  // Chat log: user message
+  logUserMessage({
+    telegramId,
+    userName: ctx.from?.first_name,
+    role: sessionContext.currentRole,
+    sessionId: sessionContext.sessionId,
+    text,
+  });
+
   try {
     const result = await processMessage({
       context: sessionContext,
@@ -431,6 +441,9 @@ async function handleActiveSessionMessage(
       messageType: 'TEXT',
       telegramMessageId: ctx.message!.message_id,
     });
+
+    // Chat log: bot coaching response
+    logBotCoaching({ sessionId: sessionContext.sessionId, text: result.coachingResponse });
 
     // Send coaching response (with buttons for frustration)
     if (result.isFrustrationMenu) {
@@ -451,6 +464,8 @@ async function handleActiveSessionMessage(
 
     // If reframe is available and needs approval
     if (result.requiresApproval && result.reframedMessage) {
+      // Chat log: reframe
+      logReframe({ sessionId: sessionContext.sessionId, text: result.reframedMessage });
       // Store in pending reframes
       const message = await prisma.message.create({
         data: {
@@ -526,6 +541,15 @@ async function handleCoachingMessage(
       return;
     }
 
+    // Chat log: user message
+    logUserMessage({
+      telegramId,
+      userName: ctx.from?.first_name,
+      role: session.role,
+      sessionId,
+      text,
+    });
+
     const language = detectLanguage(text);
 
     // Fetch full session for correct userAId/userBId
@@ -547,6 +571,9 @@ async function handleCoachingMessage(
       telegramMessageId: ctx.message!.message_id,
     });
 
+    // Chat log: bot coaching response
+    logBotCoaching({ sessionId, text: result.coachingResponse });
+
     // Frustration menu — show with inline buttons
     if (result.isFrustrationMenu) {
       await trackedReply(ctx, result.coachingResponse, {
@@ -566,6 +593,8 @@ async function handleCoachingMessage(
 
     // If pipeline generated a reframe for approval (draft phase or active session)
     if (result.requiresApproval && result.reframedMessage) {
+      // Chat log: reframe
+      logReframe({ sessionId, text: result.reframedMessage });
       const message = await prisma.message.create({
         data: {
           sessionId,
