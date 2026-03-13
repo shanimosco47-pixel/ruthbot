@@ -510,7 +510,7 @@ async function handleReframeApprove(ctx: Context, telegramId: string, data: stri
   } else {
     // Partner not yet in session — message queued for delivery when they join
     await deletePendingReframe(messageId);
-    await trackedReply(ctx, '✅ ההודעה אושרה ותישלח ברגע שבן/בת הזוג יצטרף/תצטרף לסשן.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
+    await trackedReply(ctx, '✅ ההודעה אושרה ונשמרה. היא תועבר לבן/בת הזוג בצ\'אט הפרטי שלהם ברגע שיפתחו את הלינק.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
   }
 }
 

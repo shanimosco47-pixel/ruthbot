@@ -178,8 +178,13 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   let reframedMessage: string | null = null;
   let requiresApproval = false;
 
+  // Skip reframe if coaching response ends with a question — Ruth is still exploring
+  const coachingEndsWithQuestion = coachingResponse.trim().endsWith('?');
+
   const shouldGenerateReframe =
-    (context.status === 'ACTIVE' && context.userBId) || shouldDraft;
+    !isMetaFeedback &&
+    !coachingEndsWithQuestion &&
+    ((context.status === 'ACTIVE' && context.userBId) || shouldDraft);
 
   if (shouldGenerateReframe) {
     if (riskAssessment.risk_level === 'L1' || riskAssessment.risk_level === 'L2') {

@@ -86,10 +86,26 @@ describe('Component 1: Intake Quality', () => {
         { role: 'USER_A', content: 'כן, בדיוק', timestamp: new Date() },
         { role: 'BOT', content: 'בוא ננסח.', timestamp: new Date() },
       ];
-      expect(shouldGenerateDraft(4, history, 'USER_A')).toBe(true);
+      expect(shouldGenerateDraft(4, history, 'USER_A')).toBe(false);
     });
 
-    it('should trigger draft early when user provides clear content + goal at turn 3', () => {
+    it('should trigger draft at turn 5 when user provides content + emotion + goal', () => {
+      const history: ConversationMessage[] = [
+        { role: 'USER_A', content: 'היא כעסה שלא עזרתי במטבח כי נשאבתי לעבודה על המחשב ולא שמתי לב שהיא צריכה עזרה', timestamp: new Date() },
+        { role: 'BOT', content: 'הבנתי.', timestamp: new Date() },
+        { role: 'USER_A', content: 'אני רוצה שהיא תבין שלא התכוונתי לזלזל ושחשוב לי לעזור', timestamp: new Date() },
+        { role: 'BOT', content: 'ומה אסור?', timestamp: new Date() },
+        { role: 'USER_A', content: 'לא להאשים אותה. מרגיש לי רע שהיא חושבת שאני מזלזל', timestamp: new Date() },
+        { role: 'BOT', content: 'הבנתי.', timestamp: new Date() },
+        { role: 'USER_A', content: 'אני מפחד שהיא תחשוב שלא אכפת לי', timestamp: new Date() },
+        { role: 'BOT', content: 'הבנתי.', timestamp: new Date() },
+        { role: 'USER_A', content: 'כן, אני רוצה שתדע שאכפת לי', timestamp: new Date() },
+        { role: 'BOT', content: 'הבנתי.', timestamp: new Date() },
+      ];
+      expect(shouldGenerateDraft(5, history, 'USER_A')).toBe(true);
+    });
+
+    it('should NOT trigger draft at turn 3 even with clear content + goal', () => {
       const history: ConversationMessage[] = [
         { role: 'USER_A', content: 'היא כעסה שלא עזרתי במטבח כי נשאבתי לעבודה על המחשב ולא שמתי לב שהיא צריכה עזרה', timestamp: new Date() },
         { role: 'BOT', content: 'הבנתי.', timestamp: new Date() },
@@ -98,7 +114,7 @@ describe('Component 1: Intake Quality', () => {
         { role: 'USER_A', content: 'לא להאשים אותה', timestamp: new Date() },
         { role: 'BOT', content: 'הבנתי.', timestamp: new Date() },
       ];
-      expect(shouldGenerateDraft(3, history, 'USER_A')).toBe(true);
+      expect(shouldGenerateDraft(3, history, 'USER_A')).toBe(false);
     });
   });
 
@@ -288,12 +304,16 @@ describe('Component 3: Conversation Wisdom', () => {
       expect(shouldGenerateDraft(1, [], 'USER_A')).toBe(false);
     });
 
-    it('should draft at turn 5 (turnCount 4)', () => {
-      expect(shouldGenerateDraft(4, [], 'USER_A')).toBe(true);
+    it('should not draft at turn 4 without content (raised threshold)', () => {
+      expect(shouldGenerateDraft(4, [], 'USER_A')).toBe(false);
     });
 
-    it('should draft at turn 6+ (turnCount 5+)', () => {
-      expect(shouldGenerateDraft(5, [], 'USER_A')).toBe(true);
+    it('should not draft at turn 5 without content', () => {
+      expect(shouldGenerateDraft(5, [], 'USER_A')).toBe(false);
+    });
+
+    it('should draft at turn 8 (hard cap, turnCount 7)', () => {
+      expect(shouldGenerateDraft(7, [], 'USER_A')).toBe(true);
     });
   });
 

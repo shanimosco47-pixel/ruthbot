@@ -196,6 +196,27 @@ const META_FEEDBACK_PHRASES = [
   'תדבר כמו בן אדם',
   'מרגיש כמו רובוט',
   'שיחה עם קיר',
+  // System/meta questions — user asking about how the bot works, not about relationship
+  'מה קורה פה',
+  'מה זה הדבר הזה',
+  'איך זה עובד',
+  'איך את עובדת',
+  'איך אתה עובד',
+  'לא אמור',
+  'לא אמורה',
+  'לא אמורים',
+  'מה הסשן הזה',
+  'מה זה סשן',
+  'מה זה סשיין',
+  'למה שלחת',
+  'למה שלחתי',
+  'מה זאת אומרת',
+  'לא הצטרף',
+  'לא הצטרפה',
+  'להצטרף לסשן',
+  'להצטרף לסשיין',
+  'מי אמור',
+  'מי אמורה',
 ];
 
 const META_FEEDBACK_WORD_TRIGGERS = [
@@ -319,18 +340,13 @@ export function shouldGenerateDraft(
   // Hard cap: always draft by turn 8 (avoidant delay from systemPrompts)
   if (turnCount >= 7) return true;
 
-  // Content-ready: user shared both event + emotion + goal — draft at turn 4+
-  if (turnCount >= 3 && hasSubstantialContent && hasEmotionalContent && (hasMentionedGoal || hasEventContent)) {
+  // Content-ready: user shared event + emotion + goal — draft at turn 5+
+  if (turnCount >= 5 && hasSubstantialContent && hasEmotionalContent && (hasMentionedGoal || hasEventContent)) {
     return true;
   }
 
-  // Soft trigger: turn 5+ with event OR emotion (not just turn count)
-  if (turnCount >= 4 && hasSubstantialContent && (hasEmotionalContent || hasEventContent)) {
-    return true;
-  }
-
-  // Early trigger: turn 3+ with clear goal + content
-  if (turnCount >= 3 && hasSubstantialContent && hasMentionedGoal) {
+  // Soft trigger: turn 6+ with event OR emotion (not just turn count)
+  if (turnCount >= 6 && hasSubstantialContent && (hasEmotionalContent || hasEventContent)) {
     return true;
   }
 
