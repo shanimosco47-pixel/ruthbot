@@ -135,6 +135,13 @@ export async function handleMessage(ctx: Context): Promise<void> {
     activeSession.status === 'INVITE_PENDING'
   ) {
     await handleCoachingMessage(ctx, telegramId, text, activeSession.id);
+  } else if (activeSession.status === 'PENDING_PARTNER_CONSENT') {
+    await ctx.reply('ההזמנה נשלחה — ממתינים לבן/בת הזוג. ברגע שיצטרפו, תקבל/י הודעה.');
+  } else if (activeSession.status === 'REFLECTION_GATE') {
+    await ctx.reply('אתה בשלב השיקוף. מה לדעתך הדבר הכי חשוב עבור בן/בת הזוג שלך?');
+    await setUserState(telegramId, { state: 'reflection_gate_step1', sessionId: activeSession.id });
+  } else if (activeSession.status === 'CLOSED' || activeSession.status === 'LOCKED') {
+    await ctx.reply('הסשן הסתיים. אפשר להתחיל סשן חדש עם /start ❤️');
   } else {
     await ctx.reply('הסשן נמצא במצב שלא מאפשר הודעות כרגע.');
   }
