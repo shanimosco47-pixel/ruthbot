@@ -219,11 +219,15 @@ async function handleReframeEditInput(
   editedText: string,
   state: UserFlowState
 ): Promise<void> {
-  const messageId = state.data?.messageId as string;
-  const pending = await getPendingReframe(messageId);
-
-  if (!pending || !state.sessionId) {
+  const messageId = state.data?.messageId as string | undefined;
+  if (!messageId || !state.sessionId) {
     await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+    return;
+  }
+
+  const pending = await getPendingReframe(messageId);
+  if (!pending) {
+    await ctx.reply('ההודעה כבר לא זמינה.');
     return;
   }
 
@@ -235,10 +239,10 @@ async function handleReframeEditInput(
   });
 
   if (riskResult.risk_level === 'L3' || riskResult.risk_level === 'L3_PLUS' || riskResult.risk_level === 'L4') {
-    // Toxic edit — AI generates new reframe of the edited version
-    pending.editIterations++;
-
-    if (pending.editIterations >= 3) {
+    // Toxic edit — check iteration limit BEFORE incrementing
+    if (pending.editIterations + 1 >= 3) {
+      pending.editIterations++;
+      await setPendingReframe(messageId, pending);
       await ctx.reply(
         'הגעת למספר המקסימלי של עריכות.',
         Markup.inlineKeyboard([
@@ -250,12 +254,25 @@ async function handleReframeEditInput(
 
     await ctx.reply('הניסוח הזה עדיין חד מדי. בואו ננסח יחד גרסה שתעבוד טוב יותר... 🕐');
 
-    const newReframe = await callClaude({
-      systemPrompt: `You are reframing an edited message that was classified as toxic. Apply EFT to surface the primary emotion beneath the secondary emotion. Keep the core message but remove toxicity. Respond in Hebrew. Return ONLY the reframed text.`,
-      userMessage: editedText,
-      sessionId: state.sessionId,
-    });
+    let newReframe: string;
+    try {
+      newReframe = await callClaude({
+        systemPrompt: `You are reframing an edited message that was classified as toxic. Apply EFT to surface the primary emotion beneath the secondary emotion. Keep the core message but remove toxicity. Respond in Hebrew. Return ONLY the reframed text.`,
+        userMessage: editedText,
+        sessionId: state.sessionId,
+      });
+    } catch (error) {
+      logger.error('Claude API failed during reframe edit', {
+        messageId,
+        sessionId: state.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await ctx.reply('אירעה שגיאה בניסוח. נסה/י שוב.');
+      return; // Don't increment editIterations on API failure
+    }
 
+    // Only increment AFTER successful reframe generation
+    pending.editIterations++;
     pending.reframedText = newReframe;
     await setPendingReframe(messageId, pending);
 
