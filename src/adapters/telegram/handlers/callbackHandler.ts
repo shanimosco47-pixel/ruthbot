@@ -556,6 +556,20 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
   const parts = parseCallbackData(data, 2);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
   const messageId = parts[1];
+
+  const pending = await getPendingReframe(messageId);
+  if (!pending) {
+    await ctx.reply('ההודעה כבר לא זמינה.');
+    return;
+  }
+
+  // Authorization: only the user who created this reframe can cancel it
+  if (pending.ownerTelegramId !== telegramId) {
+    logger.warn('Unauthorized reframe cancel attempt', { telegramId, messageId });
+    await ctx.reply('אין הרשאה לפעולה זו.');
+    return;
+  }
+
   await deletePendingReframe(messageId);
 
   const currentState = await getUserState(telegramId);
