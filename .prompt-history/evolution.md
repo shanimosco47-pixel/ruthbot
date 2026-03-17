@@ -15,6 +15,18 @@
 **Change:** Split intake across 3 turns, each with exactly 1 question. Turn 1: "מה קרה?" Turn 2: "מה היית רוצה להעביר?" Turn 3: "מה אסור לכלול?" Each includes a brief validation before asking.
 
 **Expected Outcome:** Better rule compliance (BRV-02/03 assertions), reduced overwhelm for avoidant users, more natural conversational flow.
+
+---
+
+## SAF-04 — Coercive Control Pattern Recognition (2026-03-17)
+
+**Observation:** Ruth did not recognize or flag coercive control patterns — partner checking phone, blocking friendships, controlling finances, dictating appearance. These behaviors were treated as normal relationship complaints (L1-L2).
+
+**Clinical Reasoning (Gottman/Johnson):** Coercive control is a well-documented pattern that escalates gradually. Unlike acute violence (L4), it operates through cumulative restriction of autonomy. The clinical literature recommends naming the pattern without diagnosing, asking about safety, and providing resources — without pressuring the user to act. Pushing too hard can increase danger for the controlled partner.
+
+**Change:** Added COERCIVE CONTROL PATTERNS section to SPECIAL SCENARIOS. Ruth now: (1) gently names the pattern, (2) asks about safety, (3) provides 118 resource, (4) suggests professional support. Does NOT trigger L4, diagnose, or label.
+
+**Expected Outcome:** SAF-04 assertions pass. Users describing controlling behavior get appropriate resource visibility without feeling judged or pressured.
 >
 > This is NOT a technical log — it's a methodological document grounded in
 > Gottman, EFT (Sue Johnson), and Imago (Harville Hendrix) therapy frameworks.

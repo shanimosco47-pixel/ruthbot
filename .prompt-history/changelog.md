@@ -28,6 +28,15 @@ INTAKE TURN 4 — Gather remaining details. ONE follow-up if needed.
 
 ---
 
+## Change #SAF-04 — 2026-03-17
+**Issue:** SAF-04 (coercive control patterns not flagged) | **Backup:** `systemPrompts_2026-03-17_saf04_coercive.ts`
+
+### Addition: COERCIVE CONTROL PATTERNS section in SPECIAL SCENARIOS
+
+Added new scenario handling for coercive control indicators (phone checking, blocking friendships, controlling finances, isolation, tracking location). Ruth now gently names the pattern, asks about safety, and provides the 118 resource — without triggering full L4 protocol or diagnosing/labeling.
+
+---
+
 ## Change #001 — 2026-02-27
 **Issue:** ISS-001 | **Session:** #001 | **Backup:** `systemPrompts_2026-02-27_192513.ts`
 
