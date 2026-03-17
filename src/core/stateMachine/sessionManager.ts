@@ -12,36 +12,23 @@ export class SessionManager {
   static async findOrCreateUser(telegramId: string, name?: string, language?: string): Promise<string> {
     // O(1) lookup using deterministic HMAC hash
     const hash = hmacHash(telegramId);
-    const existing = await prisma.user.findUnique({
-      where: { telegramIdHash: hash },
-      select: { id: true },
-    });
-
-    if (existing) {
-      if (language) {
-        await prisma.user.update({
-          where: { id: existing.id },
-          data: { language },
-        });
-      }
-      return existing.id;
-    }
-
-    // Create new user
     const encryptedTelegramId = encrypt(telegramId);
     const encryptedName = name ? encrypt(name) : null;
 
-    const newUser = await prisma.user.create({
-      data: {
+    // Atomic upsert to prevent race condition on concurrent first-time user creation
+    const user = await prisma.user.upsert({
+      where: { telegramIdHash: hash },
+      update: language ? { language } : {},
+      create: {
         telegramId: encryptedTelegramId,
         telegramIdHash: hash,
         name: encryptedName,
         language: language || 'he',
       },
+      select: { id: true },
     });
 
-    logger.info('New user created', { userId: newUser.id });
-    return newUser.id;
+    return user.id;
   }
 
   /**

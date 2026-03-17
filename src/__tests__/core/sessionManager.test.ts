@@ -2,6 +2,7 @@
 const mockUserFindUnique = jest.fn();
 const mockUserCreate = jest.fn();
 const mockUserUpdate = jest.fn();
+const mockUserUpsert = jest.fn();
 const mockSessionCreate = jest.fn();
 const mockSessionFindUnique = jest.fn();
 const mockSessionFindFirst = jest.fn();
@@ -15,6 +16,7 @@ jest.mock('../../db/client', () => ({
       findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
       create: (...args: unknown[]) => mockUserCreate(...args),
       update: (...args: unknown[]) => mockUserUpdate(...args),
+      upsert: (...args: unknown[]) => mockUserUpsert(...args),
     },
     coupleSession: {
       create: (...args: unknown[]) => mockSessionCreate(...args),
@@ -64,68 +66,71 @@ describe('SessionManager', () => {
   // findOrCreateUser
   // ============================================
   describe('findOrCreateUser', () => {
-    it('should return existing user ID when user exists', async () => {
-      mockUserFindUnique.mockResolvedValue({ id: 'existing-user-id' });
+    it('should return user ID via atomic upsert', async () => {
+      mockUserUpsert.mockResolvedValue({ id: 'existing-user-id' });
 
       const result = await SessionManager.findOrCreateUser('12345', 'John');
       expect(result).toBe('existing-user-id');
-      expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockUserUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { telegramIdHash: 'hmac_12345' },
+          select: { id: true },
+        })
+      );
     });
 
-    it('should create new user when not found', async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      mockUserCreate.mockResolvedValue({ id: 'new-user-id' });
+    it('should create new user with encrypted fields via upsert', async () => {
+      mockUserUpsert.mockResolvedValue({ id: 'new-user-id' });
 
       const result = await SessionManager.findOrCreateUser('99999', 'Jane');
       expect(result).toBe('new-user-id');
-      expect(mockUserCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          telegramId: 'enc_99999',
-          telegramIdHash: 'hmac_99999',
-          name: 'enc_Jane',
-          language: 'he',
-        }),
-      });
+      expect(mockUserUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            telegramId: 'enc_99999',
+            telegramIdHash: 'hmac_99999',
+            name: 'enc_Jane',
+            language: 'he',
+          }),
+        })
+      );
     });
 
     it('should store encrypted telegram ID and HMAC hash', async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      mockUserCreate.mockResolvedValue({ id: 'user-1' });
+      mockUserUpsert.mockResolvedValue({ id: 'user-1' });
 
       await SessionManager.findOrCreateUser('67890', 'Test');
 
-      const createCall = mockUserCreate.mock.calls[0][0];
-      expect(createCall.data.telegramId).toBe('enc_67890');
-      expect(createCall.data.telegramIdHash).toBe('hmac_67890');
+      const upsertCall = mockUserUpsert.mock.calls[0][0];
+      expect(upsertCall.create.telegramId).toBe('enc_67890');
+      expect(upsertCall.create.telegramIdHash).toBe('hmac_67890');
     });
 
-    it('should update language when provided for existing user', async () => {
-      mockUserFindUnique.mockResolvedValue({ id: 'user-1' });
+    it('should set language update when language provided', async () => {
+      mockUserUpsert.mockResolvedValue({ id: 'user-1' });
 
       await SessionManager.findOrCreateUser('12345', undefined, 'en');
 
-      expect(mockUserUpdate).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
-        data: { language: 'en' },
-      });
+      const upsertCall = mockUserUpsert.mock.calls[0][0];
+      expect(upsertCall.update).toEqual({ language: 'en' });
     });
 
-    it('should not update language when not provided', async () => {
-      mockUserFindUnique.mockResolvedValue({ id: 'user-1' });
+    it('should set empty update when no language provided', async () => {
+      mockUserUpsert.mockResolvedValue({ id: 'user-1' });
 
       await SessionManager.findOrCreateUser('12345');
 
-      expect(mockUserUpdate).not.toHaveBeenCalled();
+      const upsertCall = mockUserUpsert.mock.calls[0][0];
+      expect(upsertCall.update).toEqual({});
     });
 
     it('should handle null name gracefully', async () => {
-      mockUserFindUnique.mockResolvedValue(null);
-      mockUserCreate.mockResolvedValue({ id: 'user-1' });
+      mockUserUpsert.mockResolvedValue({ id: 'user-1' });
 
       await SessionManager.findOrCreateUser('12345');
 
-      const createCall = mockUserCreate.mock.calls[0][0];
-      expect(createCall.data.name).toBeNull();
+      const upsertCall = mockUserUpsert.mock.calls[0][0];
+      expect(upsertCall.create.name).toBeNull();
     });
   });
 
