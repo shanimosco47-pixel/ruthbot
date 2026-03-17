@@ -38,9 +38,11 @@ export function checkResponseQuality(response: string): string {
   // Enforce forbidden architecture phrases — replace with correct explanation
   cleaned = replaceForbiddenPhrases(cleaned);
 
-  // Enforce single question rule: keep only the first question mark sentence
-  const questionCount = (cleaned.match(/\?/g) || []).length;
-  if (questionCount > MAX_QUESTIONS) {
+  // Enforce single question rule: keep only the first question (explicit ? or implicit imperative)
+  const explicitQuestionCount = (cleaned.match(/\?/g) || []).length;
+  const implicitQuestionCount = countImplicitQuestions(cleaned);
+  const totalQuestionCount = explicitQuestionCount + implicitQuestionCount;
+  if (totalQuestionCount > MAX_QUESTIONS) {
     cleaned = removeExtraQuestions(cleaned);
   }
 
@@ -145,6 +147,22 @@ function isImplicitQuestion(sentence: string): boolean {
   if (words.length === 0) return false;
   const firstWord = words[0];
   return IMPLICIT_QUESTION_PATTERNS.some((pattern) => pattern.test(firstWord));
+}
+
+/**
+ * Count implicit questions (Hebrew imperatives) in text.
+ * Splits by sentence boundaries and checks each non-explicit-question sentence.
+ */
+function countImplicitQuestions(text: string): number {
+  const sentences = text.split(/(?<=\?|!|\.)\s*/);
+  let count = 0;
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    if (!trimmed) continue;
+    if (trimmed.includes('?')) continue; // explicit question, counted separately
+    if (isImplicitQuestion(trimmed)) count++;
+  }
+  return count;
 }
 
 /**

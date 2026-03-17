@@ -210,6 +210,20 @@ describe('Component 2: Response Quality', () => {
       expect(result).toContain('אני שומעת אותך');
       expect(result).toContain('זה נשמע קשה');
     });
+
+    it('should strip implicit questions when an explicit question already exists (BRV-02/03)', () => {
+      // 1 explicit ? + 1 implicit imperative = 2 total questions → should strip the implicit one
+      const oneExplicitOneImplicit = 'מה קרה? ספרי לי עוד על הרגע הזה.';
+      const result = checkResponseQuality(oneExplicitOneImplicit);
+      expect(result).toContain('מה קרה?');
+      expect(result).not.toContain('ספרי לי');
+    });
+
+    it('should allow implicit question when no explicit question exists', () => {
+      const onlyImplicit = 'אני שומעת אותך. ספרי לי עוד.';
+      const result = checkResponseQuality(onlyImplicit);
+      expect(result).toContain('ספרי לי');
+    });
   });
 
   // Test 2.3: Perspective Clarity (7 points)
