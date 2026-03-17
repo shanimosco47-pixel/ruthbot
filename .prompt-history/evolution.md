@@ -3,6 +3,18 @@
 > This document tells the story of Ruth's growth as a couples mediation facilitator.
 > Each entry records a clinical observation from training, the theoretical reasoning
 > behind the recommended change, and the expected outcome.
+
+---
+
+## BRV-02/03 — Intake Restructuring (2026-03-17)
+
+**Observation:** Ruth's first message to users contained 3 question marks ("מה קרה? מה היית רוצה להעביר? מה אסור לכלול?"), violating her own single-question rule and overwhelming users with multiple demands at once.
+
+**Clinical Reasoning (Gottman):** The research on "soft startup" emphasizes beginning with one question at a time. Flooding the user with 3 questions creates cognitive overload, especially for avoidant attachment styles who may shut down when faced with multiple demands. Sequential single-question turns also allow the therapist to validate each response before moving on — a core EFT principle.
+
+**Change:** Split intake across 3 turns, each with exactly 1 question. Turn 1: "מה קרה?" Turn 2: "מה היית רוצה להעביר?" Turn 3: "מה אסור לכלול?" Each includes a brief validation before asking.
+
+**Expected Outcome:** Better rule compliance (BRV-02/03 assertions), reduced overwhelm for avoidant users, more natural conversational flow.
 >
 > This is NOT a technical log — it's a methodological document grounded in
 > Gottman, EFT (Sue Johnson), and Imago (Harville Hendrix) therapy frameworks.

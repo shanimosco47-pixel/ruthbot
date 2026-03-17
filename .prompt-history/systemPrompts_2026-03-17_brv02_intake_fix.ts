@@ -528,19 +528,11 @@ function getPhaseInstruction(turnCount: number, shouldDraft: boolean, isFrustrat
   }
 
   if (turnCount === 0) {
-    return 'INTAKE TURN 1 — Welcome briefly (1 sentence), then ask ONE question only: מה קרה? Do NOT ask multiple questions. The goal and boundary questions come in later turns.';
-  }
-
-  if (turnCount === 1) {
-    return 'INTAKE TURN 2 — Validate briefly (1 sentence echoing their words). Then ask ONE question: מה היית רוצה להעביר? (or similar goal question). Do NOT ask more than one question.';
-  }
-
-  if (turnCount === 2) {
-    return 'INTAKE TURN 3 — Validate briefly. Then ask ONE question: מה אסור לכלול? (the redline/boundary). Do NOT ask more than one question.';
+    return 'INTAKE TURN 1 — Welcome briefly, then ask: מה קרה? מה היית רוצה להעביר? מה אסור לכלול? Keep it short.';
   }
 
   if (turnCount < 4) {
-    return `INTAKE TURN ${turnCount + 1} — Gather any remaining details. Validate briefly (1 sentence). Ask ONE follow-up if needed. Do NOT explore emotions endlessly.`;
+    return `INTAKE TURN ${turnCount + 1} — Gather answers. Validate briefly (1 sentence). Ask ONE follow-up if needed. Do NOT explore emotions endlessly.`;
   }
 
   return 'DRAFT PHASE — You have enough information. The system will generate the draft message separately below your response. Your coaching text should be a brief transition: summarize what you heard in 1-2 sentences, then say something like "בואי ננסח הודעה שתעביר את מה שחשוב לך." Do NOT write the draft message yourself — the system does it. SOFTENING OVERRIDE: If the user has JUST expressed a primary attachment need (fear, loneliness, need for closeness/security) for the FIRST time in this turn or the previous turn, take ONE more reflective turn — validate and mirror the need back — before drafting. This is the most therapeutically significant moment; do not rush past it. AVOIDANT DRAFT DELAY: If by this turn the user has NOT expressed any primary emotion (fear, loneliness, shame, need for closeness/security) and has only shared surface-level content (logistics, complaints, "I don\'t know") — do NOT draft yet. Continue gathering with gentle, low-pressure prompts for up to 3 more turns. Avoidant users need more time to open up. Draft when primary emotion surfaces or by Turn 8 at latest.';

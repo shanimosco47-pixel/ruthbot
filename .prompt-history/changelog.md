@@ -5,6 +5,29 @@
 
 ---
 
+## Change #BRV-02/03 — 2026-03-17
+**Issue:** BRV-02/03 (multiple questions in greeting) | **Backup:** `systemPrompts_2026-03-17_brv02_intake_fix.ts`
+
+### Diff: `getPhaseInstruction()` — intake turns restructured
+
+**Before:**
+```
+INTAKE TURN 1 — Welcome briefly, then ask: מה קרה? מה היית רוצה להעביר? מה אסור לכלול? Keep it short.
+INTAKE TURN 2-3 — Gather answers. Validate briefly (1 sentence). Ask ONE follow-up if needed.
+```
+
+**After:**
+```
+INTAKE TURN 1 — Welcome briefly (1 sentence), then ask ONE question only: מה קרה? Do NOT ask multiple questions.
+INTAKE TURN 2 — Validate briefly. Then ask ONE question: מה היית רוצה להעביר?
+INTAKE TURN 3 — Validate briefly. Then ask ONE question: מה אסור לכלול?
+INTAKE TURN 4 — Gather remaining details. ONE follow-up if needed.
+```
+
+**Rationale:** The original TURN 1 asked 3 questions in one message (3 question marks), violating ABSOLUTE RULE #2 ("At most 1 question mark per message"). The responseValidator strips extra questions, but this created inconsistency between prompt instructions and enforcement.
+
+---
+
 ## Change #001 — 2026-02-27
 **Issue:** ISS-001 | **Session:** #001 | **Backup:** `systemPrompts_2026-02-27_192513.ts`
 

@@ -25,38 +25,45 @@ import type { ConversationMessage } from '../../types';
 // ============================================
 
 describe('Component 1: Intake Quality', () => {
-  // Test 1.1: First Message Format (10 points)
+  // Test 1.1: First Message Format — single question per turn (BRV-02/03 fix)
   describe('Test 1.1: First Message Format', () => {
-    const INTAKE_TEMPLATE = `שלום! אני רות, מנחה זוגי.
-בואו נתחיל בתלוש (משפט אחד לכל שאלה):
-1️⃣ מה קרה?
-2️⃣ מה אתה רוצה שיקרה בסוף?
-3️⃣ מה אסור שיקרה?`;
+    const INTAKE_TURN1 = `שלום! אני רות, מנחה זוגי. מה קרה?`;
+    const INTAKE_TURN2 = `שומעת אותך. מה היית רוצה להעביר?`;
+    const INTAKE_TURN3 = `הבנתי. מה אסור שיקרה?`;
 
-    it('should contain greeting', () => {
-      expect(INTAKE_TEMPLATE).toContain('שלום');
+    it('Turn 1 should contain greeting', () => {
+      expect(INTAKE_TURN1).toContain('שלום');
     });
 
-    it('should contain "מה קרה" question', () => {
-      expect(INTAKE_TEMPLATE).toContain('מה קרה');
+    it('Turn 1 should contain "מה קרה" question', () => {
+      expect(INTAKE_TURN1).toContain('מה קרה');
     });
 
-    it('should contain goal question', () => {
-      expect(INTAKE_TEMPLATE).toContain('מה אתה רוצה');
+    it('Turn 1 should have at most 1 question mark (BRV-02/03)', () => {
+      expect((INTAKE_TURN1.match(/\?/g) || []).length).toBeLessThanOrEqual(1);
     });
 
-    it('should contain redline question', () => {
-      expect(INTAKE_TEMPLATE).toContain('מה אסור');
+    it('Turn 2 should contain goal question', () => {
+      expect(INTAKE_TURN2).toContain('מה היית רוצה');
     });
 
-    it('should be under 40 words', () => {
-      const words = INTAKE_TEMPLATE.split(/\s+/).filter((w) => w.length > 0);
-      expect(words.length).toBeLessThanOrEqual(40);
+    it('Turn 2 should have at most 1 question mark', () => {
+      expect((INTAKE_TURN2.match(/\?/g) || []).length).toBeLessThanOrEqual(1);
     });
 
-    it('should have questions on separate lines', () => {
-      const lines = INTAKE_TEMPLATE.split('\n');
-      expect(lines.length).toBeGreaterThanOrEqual(4);
+    it('Turn 3 should contain redline question', () => {
+      expect(INTAKE_TURN3).toContain('מה אסור');
+    });
+
+    it('Turn 3 should have at most 1 question mark', () => {
+      expect((INTAKE_TURN3.match(/\?/g) || []).length).toBeLessThanOrEqual(1);
+    });
+
+    it('each turn should be under 20 words', () => {
+      for (const turn of [INTAKE_TURN1, INTAKE_TURN2, INTAKE_TURN3]) {
+        const words = turn.split(/\s+/).filter((w) => w.length > 0);
+        expect(words.length).toBeLessThanOrEqual(20);
+      }
     });
   });
 
@@ -120,7 +127,7 @@ describe('Component 1: Intake Quality', () => {
 
   // Test 1.3: Question Clarity (5 points)
   describe('Test 1.3: System Prompt Phase Instructions', () => {
-    it('should instruct intake at turn 1', () => {
+    it('should instruct intake at turn 1 with single question', () => {
       const prompt = buildCoachingPrompt({
         userRole: 'USER_A',
         language: 'he',
@@ -135,6 +142,8 @@ describe('Component 1: Intake Quality', () => {
       });
       expect(prompt).toContain('INTAKE TURN 1');
       expect(prompt).toContain('מה קרה');
+      // BRV-02/03: should NOT ask multiple questions in turn 1
+      expect(prompt).toContain('ONE question only');
     });
 
     it('should instruct draft phase at turn 5', () => {
