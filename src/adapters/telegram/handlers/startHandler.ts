@@ -116,8 +116,12 @@ async function handleDeepLinkStart(
 
   // Notify User A that partner opened the link
   const notifyMsg = 'בן/בת הזוג פתח/ה את הלינק! 🎉\nממתינים להסכמה...';
-  await notifyUserA(ctx, session.userAId, notifyMsg);
-  await logBotMessage(sessionId, notifyMsg, 'USER_A');
+  const notified = await notifyUserA(ctx, session.userAId, notifyMsg);
+  if (notified) {
+    await logBotMessage(sessionId, notifyMsg, 'USER_A');
+  } else {
+    logger.warn('Could not notify User A about partner link open', { sessionId, userAId: session.userAId });
+  }
 }
 
 async function handleUnsubscribe(ctx: Context, telegramId: string): Promise<void> {
@@ -155,7 +159,7 @@ async function getSessionTopicCategory(sessionId: string): Promise<string | null
   return latestRisk?.topicCategory || null;
 }
 
-async function notifyUserA(ctx: Context, userAId: string, message: string): Promise<void> {
+async function notifyUserA(ctx: Context, userAId: string, message: string): Promise<boolean> {
   try {
     const { decrypt } = await import('../../../utils/encryption');
 
@@ -167,11 +171,15 @@ async function notifyUserA(ctx: Context, userAId: string, message: string): Prom
     if (userA) {
       const telegramIdA = decrypt(userA.telegramId);
       await ctx.telegram.sendMessage(telegramIdA, message);
+      return true;
     }
+    logger.warn('User A not found for notification', { userAId });
+    return false;
   } catch (error) {
     logger.error('Failed to notify User A', {
       userAId,
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
 }

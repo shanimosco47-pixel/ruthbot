@@ -490,6 +490,13 @@ async function handleReframeApprove(ctx: Context, telegramId: string, data: stri
     return;
   }
 
+  // Atomic claim: delete pending reframe to prevent double-click race condition
+  const claimed = await deletePendingReframe(messageId);
+  if (!claimed) {
+    await ctx.reply('ההודעה כבר טופלה.');
+    return;
+  }
+
   // Mark as approved (but NOT delivered yet — only after successful send)
   await prisma.message.update({
     where: { id: messageId },
@@ -505,11 +512,9 @@ async function handleReframeApprove(ctx: Context, telegramId: string, data: stri
       where: { id: messageId },
       data: { delivered: true },
     });
-    await deletePendingReframe(messageId);
     await trackedReply(ctx, '✅ ההודעה נשלחה לבן/בת הזוג.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
   } else {
     // Partner not yet in session — message queued for delivery when they join
-    await deletePendingReframe(messageId);
     await trackedReply(ctx, '✅ ההודעה אושרה ונשמרה. היא תועבר לבן/בת הזוג בצ\'אט הפרטי שלהם ברגע שיפתחו את הלינק.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
   }
 }

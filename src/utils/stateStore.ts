@@ -92,10 +92,11 @@ export async function setPendingReframe(messageId: string, pending: PendingRefra
   });
 }
 
-export async function deletePendingReframe(messageId: string): Promise<void> {
-  await prisma.pendingReframeState.deleteMany({
+export async function deletePendingReframe(messageId: string): Promise<boolean> {
+  const result = await prisma.pendingReframeState.deleteMany({
     where: { messageId },
   });
+  return result.count > 0;
 }
 
 /**
