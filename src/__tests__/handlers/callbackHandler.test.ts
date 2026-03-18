@@ -245,4 +245,45 @@ describe('handleCallbackQuery — authorization', () => {
       );
     });
   });
+
+  describe('reframe missing handling', () => {
+    it('should handle missing pending reframe on approve', async () => {
+      const ctx = createMockContext('reframe_approve:msg_gone', '12345');
+      mockGetPendingReframe.mockResolvedValue(null);
+
+      await handleCallbackQuery(ctx);
+
+      expect(ctx._replyMock).toHaveBeenCalledWith('ההודעה כבר לא זמינה.');
+    });
+
+    it('should handle missing pending reframe on edit', async () => {
+      const ctx = createMockContext('reframe_edit:msg_gone', '12345');
+      mockGetPendingReframe.mockResolvedValue(null);
+
+      await handleCallbackQuery(ctx);
+
+      expect(ctx._replyMock).toHaveBeenCalledWith('ההודעה כבר לא זמינה.');
+    });
+
+    it('should handle missing pending reframe on cancel', async () => {
+      const ctx = createMockContext('reframe_cancel:msg_gone', '12345');
+      mockGetPendingReframe.mockResolvedValue(null);
+
+      await handleCallbackQuery(ctx);
+
+      expect(ctx._replyMock).toHaveBeenCalledWith('ההודעה כבר לא זמינה.');
+    });
+  });
+
+  describe('malformed callback data', () => {
+    it('should handle callback with empty messageId gracefully', async () => {
+      const ctx = createMockContext('reframe_approve:', '12345');
+      mockGetPendingReframe.mockResolvedValue(null);
+
+      await handleCallbackQuery(ctx);
+
+      // Empty messageId passes parsing but getPendingReframe returns null
+      expect(ctx._replyMock).toHaveBeenCalledWith('ההודעה כבר לא זמינה.');
+    });
+  });
 });
