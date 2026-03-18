@@ -1,23 +1,47 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > This file is the persistent "brain" for development sessions. Read this FIRST if context was lost.
-> Last updated: 2026-03-10 (V3.2 comprehensive code review — encryption, safety, authorization, race conditions)
+> Last updated: 2026-03-18 (V3.3 AutoResearch — 15 iterations, 10 bug fixes, 5 prompt improvements)
 > **RULE: Update this file on every significant change (deployment, config, bug fix, new integration)**
 
 ---
 
-## Current Status: RUTH V3.2 — COMPREHENSIVE SECURITY REVIEW APPLIED 🔶
+## Current Status: RUTH V3.3 — AUTORESEARCH HARDENING ✅
 
-The bot is **live in production** on Render free tier (webhook mode) — currently running **V2.3**.
-V3.1 code (V3 + code review fixes) is local — needs push to GitHub + manual Render deploy.
+The bot is **live in production** on Render (webhook mode) — running **V3.2+**.
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
-- **Keep-alive:** UptimeRobot pings /health every 5 min (monitor re-created 2026-02-21)
-- **Last GitHub commit:** `34f4306` (V3 reframe delivery fix)
-- **Last Render deploy:** 2026-02-28 — Commit `de076fe` — still running V2.3
-- **⚡ TO DEPLOY V3.1:** Commit review fixes → `git push` → Render "Manual Deploy" → "Deploy latest commit"
+- **Keep-alive:** UptimeRobot pings /health every 5 min
+- **Last GitHub commit:** `f14e819` (Stripe webhook race fix)
+- **Production:** V3.2 deployed on Render (auto-deploys from master)
 - **V2 Training score:** 44 → 90.3 across 13 training runs
 - **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
+
+### RUTH V3.3 AutoResearch (2026-03-17/18)
+15 iterations, 10 code bugs fixed, 5 prompt improvements, 246 tests passing.
+
+**Code Fixes (Track A):**
+- handleReframeCancel: added ownerTelegramId authorization check
+- responseValidator: counts implicit questions (imperatives) in total question check
+- messageHandler: added routing for REFLECTION_GATE, PENDING_PARTNER_CONSENT, PARTNER_DECLINED
+- messageHandler: edit counter no longer increments before Claude API call succeeds
+- messageHandler: unsafe messageId cast replaced with validation
+- callbackHandler: atomic claim on reframe approve prevents double-click delivery
+- startHandler: notifyUserA returns success/failure for caller awareness
+- sessionManager: findOrCreateUser uses atomic upsert instead of find+create
+- stateStore: getPendingReframe handles decryption errors gracefully
+- stateStore: deletePendingReframe returns boolean for atomic claim pattern
+- messagePipeline: invalid 'GENERAL' topicCategory replaced with valid fallback
+- callbackHandler: frustration template type validated before use
+- stripeService: Stripe webhook uses atomic create instead of upsert to prevent race
+- messageHandler: removed unreachable CLOSED/LOCKED branches, added PARTNER_DECLINED
+
+**Prompt Improvements (Track B):**
+- BRV-02/03: Intake restructured to 1 question per turn (was 3 on turn 1)
+- SAF-04: Added coercive control pattern recognition (phone checking, isolation, etc.)
+- FRS-01: Frustrated users get 3 concrete options (continue/draft/come back later)
+- RES-02: Bot-blame response includes concrete redirect action
+- PAT-01: Pursue-withdraw pattern explicitly identified and named in Hebrew
 
 ### RUTH V3.2 Comprehensive Security Review (2026-03-10)
 - **CRITICAL — Encryption upgraded:** AES-256-CBC → AES-256-GCM (authenticated encryption)
@@ -397,11 +421,12 @@ Same as `.env` with:
 
 ## Git State
 - **Branch:** master
-- **Last commit:** `34f4306` — fix: reframe delivery pipeline + clinical prompt improvements
-- **Previous commits:** `7aff470` (v3.0 health), `e9c170c` (V3 prompt), `2dd7be5` (idle reminder fix), `5fd587f` (summary mid-flow fix)
-- **All 12 phases committed and merged + V2 → V3.1 iterations**
+- **Last commit:** `f14e819` — fix(stripeService): prevent duplicate webhook processing via atomic event claim
+- **AutoResearch commits:** 15 iterations from `3c2bb35` to `f14e819`
+- **All 12 phases committed + V2 → V3.3 iterations**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
+- **Tests:** 246 passing, 0 failing
 
 ---
 

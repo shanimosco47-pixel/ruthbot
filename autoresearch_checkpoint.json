@@ -1,0 +1,26 @@
+{
+  "current_iteration": 16,
+  "track": "A",
+  "best_test_pass_count": 246,
+  "best_prompt_pass_rate": 0.886,
+  "last_successful_commit": "f14e819",
+  "timestamp": "2026-03-18T00:30:00Z",
+  "status": "IN_PROGRESS",
+  "completed_iterations": [
+    { "iteration": 1, "track": "A", "bug": "handleReframeCancel missing auth", "commit": "3c2bb35" },
+    { "iteration": 2, "track": "A", "bug": "responseValidator implicit questions", "commit": "2535382" },
+    { "iteration": 3, "track": "A", "bug": "messageHandler session status routing", "commit": "fa6721d" },
+    { "iteration": 4, "track": "B", "issue": "BRV-02/03 intake restructure", "commit": "f0921e3" },
+    { "iteration": 5, "track": "B", "issue": "SAF-04 coercive control", "commit": "2197850" },
+    { "iteration": 6, "track": "A", "bug": "edit counter + unsafe messageId", "commit": "56c45c6" },
+    { "iteration": 7, "track": "A", "bug": "double-click reframe + notifyUserA", "commit": "551916f" },
+    { "iteration": 8, "track": "A", "bug": "findOrCreateUser race condition", "commit": "318d025" },
+    { "iteration": 9, "track": "B", "issue": "FRS-01 frustration options", "commit": "81b50ae" },
+    { "iteration": 10, "track": "B", "issue": "RES-02 bot-blame next action", "commit": "81b50ae" },
+    { "iteration": 11, "track": "A", "bug": "invalid topicCategory + template validation", "commit": "69212ba" },
+    { "iteration": 12, "track": "A", "bug": "decrypt errors in getPendingReframe", "commit": "1766aad" },
+    { "iteration": 13, "track": "A", "bug": "dead code + PARTNER_DECLINED routing", "commit": "fe7ced2" },
+    { "iteration": 14, "track": "B", "issue": "PAT-01 pursue-withdraw pattern", "commit": "93f3a31" },
+    { "iteration": 15, "track": "A", "bug": "Stripe webhook duplicate processing race", "commit": "f14e819" }
+  ]
+}
