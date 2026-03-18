@@ -1,6 +1,7 @@
 // Mock all dependencies before importing the module under test
 const mockPrismaStripeEvent = {
   findUnique: jest.fn(),
+  create: jest.fn(),
   upsert: jest.fn(),
   update: jest.fn(),
 };
@@ -119,25 +120,41 @@ describe('Stripe Service', () => {
       expect(mockPrismaStripeEvent.upsert).not.toHaveBeenCalled();
     });
 
-    it('should record event before processing', async () => {
+    it('should atomically claim event via create before processing', async () => {
       mockConstructEvent.mockReturnValue({
         id: 'evt_new',
         type: 'unknown.event',
         data: { object: {} },
       });
       mockPrismaStripeEvent.findUnique.mockResolvedValue(null);
-      mockPrismaStripeEvent.upsert.mockResolvedValue({});
+      mockPrismaStripeEvent.create.mockResolvedValue({});
 
       await handleStripeWebhook('raw-body', 'sig-header');
 
-      expect(mockPrismaStripeEvent.upsert).toHaveBeenCalledWith({
-        where: { stripeEventId: 'evt_new' },
-        create: {
+      expect(mockPrismaStripeEvent.create).toHaveBeenCalledWith({
+        data: {
           stripeEventId: 'evt_new',
           eventType: 'unknown.event',
         },
-        update: {},
       });
+    });
+
+    it('should skip processing when event already claimed by another handler', async () => {
+      mockConstructEvent.mockReturnValue({
+        id: 'evt_concurrent',
+        type: 'unknown.event',
+        data: { object: {} },
+      });
+      // findUnique returns existing but not yet processed — another handler is working on it
+      mockPrismaStripeEvent.findUnique.mockResolvedValue({
+        stripeEventId: 'evt_concurrent',
+        processed: false,
+      });
+
+      await handleStripeWebhook('raw-body', 'sig-header');
+
+      // Should not try to create or process
+      expect(mockPrismaStripeEvent.create).not.toHaveBeenCalled();
     });
   });
 

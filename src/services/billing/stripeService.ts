@@ -56,7 +56,9 @@ export async function handleStripeWebhook(
     throw new Error('Webhook signature verification failed');
   }
 
-  // Idempotency: check if we've already processed this event
+  // Idempotency: atomic claim via upsert + CAS check.
+  // The upsert creates the record if new, or returns existing.
+  // Only process if the record was just created (not yet processed).
   const existingEvent = await prisma.stripeEvent.findUnique({
     where: { stripeEventId: event.id },
   });
@@ -66,17 +68,27 @@ export async function handleStripeWebhook(
     return;
   }
 
-  // Record the event
-  await prisma.stripeEvent.upsert({
-    where: { stripeEventId: event.id },
-    create: {
-      stripeEventId: event.id,
-      eventType: event.type,
-    },
-    update: {},
-  });
+  if (existingEvent) {
+    // Record exists but not processed — another handler is already working on it
+    logger.info('Stripe event already claimed by another handler', { eventId: event.id });
+    return;
+  }
 
-  // Process event in background
+  // Atomic create — if two concurrent requests race, one will fail with unique constraint
+  try {
+    await prisma.stripeEvent.create({
+      data: {
+        stripeEventId: event.id,
+        eventType: event.type,
+      },
+    });
+  } catch (createError) {
+    // Unique constraint violation = another handler already claimed this event
+    logger.info('Stripe event already claimed (concurrent)', { eventId: event.id });
+    return;
+  }
+
+  // Process event in background — only the handler that successfully created the record proceeds
   processEventInBackground(event).catch((error) => {
     logger.error('Stripe event processing failed', {
       eventId: event.id,
