@@ -80,6 +80,15 @@ export async function handleDeleteConfirmation(ctx: Context, telegramId: string)
         data: { billingOwnerId: null },
       });
 
+      // GDPR: Also clean up operational state tied to user identity
+      await tx.pendingReframeState.deleteMany({
+        where: { ownerTelegramId: telegramId },
+      });
+
+      await tx.userFlowState.deleteMany({
+        where: { telegramId },
+      });
+
       await tx.user.delete({
         where: { id: targetUserId },
       });

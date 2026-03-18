@@ -154,8 +154,13 @@ export class SessionManager {
       return { error: 'הלינק כבר שומש. פנה/י לשולח/ת לקבלת לינק חדש.' };
     }
 
-    // Check TTL expiry
-    if (session.inviteTokenExpiresAt && new Date() > session.inviteTokenExpiresAt) {
+    // Check TTL expiry — reject if expiry is missing (should never happen but defensive)
+    if (!session.inviteTokenExpiresAt) {
+      logger.warn('Invite token has no expiry date', { sessionId: session.id, token });
+      return { error: 'הלינק לא תקין. פנה/י לשולח/ת לקבלת לינק חדש.' };
+    }
+
+    if (new Date() > session.inviteTokenExpiresAt) {
       return { error: 'הלינק פג תוקף. פנה/י לשולח/ת לקבלת לינק חדש.' };
     }
 
