@@ -249,8 +249,13 @@ async function handleL4HardStop(
       reason: 'L4_hard_stop',
       riskReasoning: riskAssessment.reasoning,
     });
-    // Clean up all in-memory state for this session
-    cleanupSessionState(context.sessionId);
+    // Clean up all in-memory state for this session (non-critical — session is already LOCKED)
+    cleanupSessionState(context.sessionId).catch((cleanupErr) => {
+      logger.warn('L4 session state cleanup failed (non-critical)', {
+        sessionId: context.sessionId,
+        error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+      });
+    });
   } catch (error) {
     logger.error('Failed to lock session on L4 via state machine, attempting emergency direct DB update', {
       sessionId: context.sessionId,
