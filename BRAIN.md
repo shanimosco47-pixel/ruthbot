@@ -12,13 +12,13 @@ The bot is **live in production** on Render (webhook mode) — running **V3.2+**
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health
 - **Keep-alive:** UptimeRobot pings /health every 5 min
-- **Last GitHub commit:** `f14e819` (Stripe webhook race fix)
-- **Production:** V3.2 deployed on Render (auto-deploys from master)
+- **Last GitHub commit:** `489b414` (L4 safety tests)
+- **Production:** V3.3 deployed on Render (auto-deploys from master)
 - **V2 Training score:** 44 → 90.3 across 13 training runs
 - **V3 Benchmark score:** 7.38 pessimistic (est. actual 7.9-8.4) — 20 scenarios, all ≥ 7.0
 
 ### RUTH V3.3 AutoResearch (2026-03-17/18)
-15 iterations, 10 code bugs fixed, 5 prompt improvements, 246 tests passing.
+21 iterations, 14 code bugs fixed, 7 prompt improvements, 248 tests passing.
 
 **Code Fixes (Track A):**
 - handleReframeCancel: added ownerTelegramId authorization check
@@ -35,6 +35,9 @@ The bot is **live in production** on Render (webhook mode) — running **V3.2+**
 - callbackHandler: frustration template type validated before use
 - stripeService: Stripe webhook uses atomic create instead of upsert to prevent race
 - messageHandler: removed unreachable CLOSED/LOCKED branches, added PARTNER_DECLINED
+- deleteHandler: GDPR /delete_my_data now clears PendingReframeState + UserFlowState
+- sessionManager: consumeInviteToken rejects tokens with null expiry
+- responseValidator: L4 safety responses skip word limit (safety > formatting)
 
 **Prompt Improvements (Track B):**
 - BRV-02/03: Intake restructured to 1 question per turn (was 3 on turn 1)
@@ -42,6 +45,8 @@ The bot is **live in production** on Render (webhook mode) — running **V3.2+**
 - FRS-01: Frustrated users get 3 concrete options (continue/draft/come back later)
 - RES-02: Bot-blame response includes concrete redirect action
 - PAT-01: Pursue-withdraw pattern explicitly identified and named in Hebrew
+- Stonewalling: Gottman Horseman #4 handling for both partner and user shutdown
+- Validation rotation: 10 varied openers to prevent repetitive "אני מבינה"
 
 ### RUTH V3.2 Comprehensive Security Review (2026-03-10)
 - **CRITICAL — Encryption upgraded:** AES-256-CBC → AES-256-GCM (authenticated encryption)
@@ -426,7 +431,7 @@ Same as `.env` with:
 - **All 12 phases committed + V2 → V3.3 iterations**
 - **GitHub remote:** https://github.com/shanimosco47-pixel/ruthbot.git
 - **Repo visibility:** Public (required for Render free tier without GitHub OAuth)
-- **Tests:** 246 passing, 0 failing
+- **Tests:** 248 passing, 0 failing
 
 ---
 

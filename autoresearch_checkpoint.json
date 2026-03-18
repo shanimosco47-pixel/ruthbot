@@ -1,11 +1,11 @@
 {
-  "current_iteration": 20,
+  "current_iteration": 22,
   "track": "A",
-  "best_test_pass_count": 246,
+  "best_test_pass_count": 248,
   "best_prompt_pass_rate": 0.886,
-  "last_successful_commit": "185d3db",
-  "timestamp": "2026-03-18T01:30:00Z",
-  "status": "IN_PROGRESS",
+  "last_successful_commit": "489b414",
+  "timestamp": "2026-03-18T02:00:00Z",
+  "status": "PAUSED",
   "completed_iterations": [
     { "iteration": 1, "track": "A", "bug": "handleReframeCancel missing auth", "commit": "3c2bb35" },
     { "iteration": 2, "track": "A", "bug": "responseValidator implicit questions", "commit": "2535382" },
@@ -25,12 +25,19 @@
     { "iteration": 16, "track": "A", "bug": "GDPR delete missing state cleanup", "commit": "8b58748" },
     { "iteration": 17, "track": "A", "bug": "null token expiry accepted", "commit": "8b58748" },
     { "iteration": 18, "track": "B", "issue": "Stonewalling handling", "commit": "185d3db" },
-    { "iteration": 19, "track": "B", "issue": "Validation rotation list", "commit": "185d3db" }
+    { "iteration": 19, "track": "B", "issue": "Validation rotation list", "commit": "185d3db" },
+    { "iteration": 20, "track": "A", "bug": "L4 safety responses truncated at 55 words", "commit": "de3d9db" },
+    { "iteration": 21, "track": "A", "test": "L4 bypass safety tests", "commit": "489b414" }
   ],
   "stats": {
-    "track_a_bugs_fixed": 12,
+    "track_a_bugs_fixed": 14,
     "track_b_prompt_improvements": 7,
-    "tests_total": 246,
-    "tests_added": 10
-  }
+    "tests_total": 248,
+    "tests_added": 14
+  },
+  "remaining_known_issues": [
+    "User B can join multiple sessions simultaneously (needs business rule guard)",
+    "Double /start before disclaimer creates multiple sessions (needs session lock)",
+    "Consent accept race condition (needs atomic CAS)"
+  ]
 }
