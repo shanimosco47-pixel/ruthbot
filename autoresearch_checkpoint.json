@@ -1,11 +1,11 @@
 {
-  "current_iteration": 25,
+  "current_iteration": 27,
   "track": "A",
   "best_test_pass_count": 248,
   "best_prompt_pass_rate": 0.886,
-  "last_successful_commit": "5c8658f",
-  "timestamp": "2026-03-18T02:30:00Z",
-  "status": "PAUSED",
+  "last_successful_commit": "1323a43",
+  "timestamp": "2026-03-18T03:00:00Z",
+  "status": "PAUSED_CLEAN",
   "completed_iterations": [
     { "iteration": 1, "track": "A", "bug": "handleReframeCancel missing auth", "commit": "3c2bb35" },
     { "iteration": 2, "track": "A", "bug": "responseValidator implicit questions", "commit": "2535382" },
@@ -30,17 +30,19 @@
     { "iteration": 21, "track": "A", "test": "L4 bypass safety tests", "commit": "489b414" },
     { "iteration": 22, "track": "A", "bug": "User B multi-session guard", "commit": "4db55ad" },
     { "iteration": 23, "track": "B", "issue": "Financial conflict handling", "commit": "66ed6a8" },
-    { "iteration": 24, "track": "A", "bug": "REFLECTION_GATE state restore missing reframe content", "commit": "5c8658f" }
+    { "iteration": 24, "track": "A", "bug": "REFLECTION_GATE state restore missing reframe", "commit": "5c8658f" },
+    { "iteration": 25, "track": "B", "issue": "In-law conflict handling", "commit": "6f36334" },
+    { "iteration": 26, "track": "A", "fix": "Typing indicator before reminder generation", "commit": "1323a43" }
   ],
   "stats": {
-    "track_a_bugs_fixed": 17,
-    "track_b_prompt_improvements": 8,
+    "track_a_bugs_fixed": 18,
+    "track_b_prompt_improvements": 9,
     "tests_total": 248,
     "tests_added": 14,
-    "commits_pushed": 18
+    "commits_pushed": 21
   },
   "remaining_known_issues": [
-    "Double /start before disclaimer creates multiple sessions (low priority — rare edge case)",
-    "Consent accept race condition has CAS protection but error message is generic (cosmetic)"
+    "Double /start before disclaimer creates multiple sessions (low priority — rare)",
+    "Consent accept race condition has CAS protection but generic error message (cosmetic)"
   ]
 }
