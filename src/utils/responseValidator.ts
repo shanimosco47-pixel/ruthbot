@@ -32,11 +32,16 @@ const ARCHITECTURE_CORRECTION = 'כל אחד מדבר איתי בצ\'אט פרט
  * Enforce word limit + one-question rule + forbidden phrases on Ruth's response.
  * Returns cleaned response text.
  */
-export function checkResponseQuality(response: string): string {
+export function checkResponseQuality(response: string, riskLevel?: string): string {
   let cleaned = response;
 
   // Enforce forbidden architecture phrases — replace with correct explanation
   cleaned = replaceForbiddenPhrases(cleaned);
+
+  // L4 safety responses skip word limit and question rules (safety > formatting)
+  if (riskLevel === 'L4') {
+    return cleaned;
+  }
 
   // Enforce single question rule: keep only the first question (explicit ? or implicit imperative)
   const explicitQuestionCount = (cleaned.match(/\?/g) || []).length;

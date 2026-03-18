@@ -173,7 +173,7 @@ export async function classifyRiskAndCoach(params: {
         : { risk_level: 'L3_PLUS', topic_category: FALLBACK_TOPIC_CATEGORY, action_required: 'Fallback — invalid combined response, restrictive classification applied', reasoning: 'Automatic RESTRICTIVE fallback due to parsing error — L3_PLUS for safety' };
 
       const coaching = typeof rawCoaching === 'string' && rawCoaching.length > 0
-        ? checkResponseQuality(rawCoaching)
+        ? checkResponseQuality(rawCoaching, risk.risk_level)
         : 'אני כאן בשבילך. ספר/י לי מה קורה?';
 
       await logRiskEvent({ sessionId, senderRole, riskLevel: risk.risk_level, topicCategory: risk.topic_category, reasoning: risk.reasoning, actionRequired: risk.action_required });
@@ -199,7 +199,7 @@ export async function classifyRiskAndCoach(params: {
       topicCategory: risk.topic_category,
     });
 
-    return { risk, coaching: checkResponseQuality(coaching) };
+    return { risk, coaching: checkResponseQuality(coaching, risk.risk_level) };
   } catch (error) {
     logger.error('Combined risk+coaching call failed', {
       sessionId,
