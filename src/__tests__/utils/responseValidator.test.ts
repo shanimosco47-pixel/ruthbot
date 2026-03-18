@@ -11,6 +11,7 @@
 import {
   checkResponseQuality,
   detectFrustration,
+  detectMetaFeedback,
   getFrustrationMenu,
   getUserTurnCount,
   shouldGenerateDraft,
@@ -328,6 +329,29 @@ describe('Component 3: Conversation Wisdom', () => {
       const menu = getFrustrationMenu();
       expect(menu).not.toContain('איך אתה מרגיש');
       expect(menu).not.toContain('ספר לי עוד');
+    });
+  });
+
+  // Test 3.1c: Meta-Feedback Detection
+  describe('Test 3.1c: Meta-Feedback Detection', () => {
+    it('should detect bot criticism', () => {
+      expect(detectMetaFeedback('את לא עוזרת')).toBe(true);
+      expect(detectMetaFeedback('הבוט לא עוזר')).toBe(true);
+    });
+
+    it('should detect system questions', () => {
+      expect(detectMetaFeedback('איך זה עובד')).toBe(true);
+      expect(detectMetaFeedback('מה זה הדבר הזה')).toBe(true);
+    });
+
+    it('should detect repetition complaints', () => {
+      expect(detectMetaFeedback('חוזרת על עצמך')).toBe(true);
+      expect(detectMetaFeedback('כבר אמרתי')).toBe(true);
+    });
+
+    it('should NOT detect normal relationship content', () => {
+      expect(detectMetaFeedback('הוא לא עוזר במטבח')).toBe(false);
+      expect(detectMetaFeedback('אני מרגישה בודדה')).toBe(false);
     });
   });
 
