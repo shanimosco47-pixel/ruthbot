@@ -191,6 +191,20 @@ describe('Component 2: Response Quality', () => {
       // Should not truncate at exactly limit
       expect(result.split(/\s+/).filter((w) => w.length > 0).length).toBe(55);
     });
+
+    it('should NOT truncate L4 safety responses even if over 55 words', () => {
+      const longSafetyResponse = Array(90).fill('מילה').join(' ') + ' 📞 קו חירום: 118';
+      const result = checkResponseQuality(longSafetyResponse, 'L4');
+      // L4 safety > word count — should preserve full response
+      expect(result).toBe(longSafetyResponse);
+    });
+
+    it('should still truncate non-L4 long responses', () => {
+      const longResponse = Array(100).fill('מילה').join(' ');
+      const resultL1 = checkResponseQuality(longResponse, 'L1');
+      const wordCount = resultL1.split(/\s+/).filter((w) => w.length > 0).length;
+      expect(wordCount).toBeLessThanOrEqual(75);
+    });
   });
 
   // Test 2.2: Question Discipline (8 points)

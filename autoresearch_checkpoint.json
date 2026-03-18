@@ -1,10 +1,10 @@
 {
-  "current_iteration": 16,
+  "current_iteration": 20,
   "track": "A",
   "best_test_pass_count": 246,
   "best_prompt_pass_rate": 0.886,
-  "last_successful_commit": "f14e819",
-  "timestamp": "2026-03-18T00:30:00Z",
+  "last_successful_commit": "185d3db",
+  "timestamp": "2026-03-18T01:30:00Z",
   "status": "IN_PROGRESS",
   "completed_iterations": [
     { "iteration": 1, "track": "A", "bug": "handleReframeCancel missing auth", "commit": "3c2bb35" },
@@ -21,6 +21,16 @@
     { "iteration": 12, "track": "A", "bug": "decrypt errors in getPendingReframe", "commit": "1766aad" },
     { "iteration": 13, "track": "A", "bug": "dead code + PARTNER_DECLINED routing", "commit": "fe7ced2" },
     { "iteration": 14, "track": "B", "issue": "PAT-01 pursue-withdraw pattern", "commit": "93f3a31" },
-    { "iteration": 15, "track": "A", "bug": "Stripe webhook duplicate processing race", "commit": "f14e819" }
-  ]
+    { "iteration": 15, "track": "A", "bug": "Stripe webhook race condition", "commit": "f14e819" },
+    { "iteration": 16, "track": "A", "bug": "GDPR delete missing state cleanup", "commit": "8b58748" },
+    { "iteration": 17, "track": "A", "bug": "null token expiry accepted", "commit": "8b58748" },
+    { "iteration": 18, "track": "B", "issue": "Stonewalling handling", "commit": "185d3db" },
+    { "iteration": 19, "track": "B", "issue": "Validation rotation list", "commit": "185d3db" }
+  ],
+  "stats": {
+    "track_a_bugs_fixed": 12,
+    "track_b_prompt_improvements": 7,
+    "tests_total": 246,
+    "tests_added": 10
+  }
 }
