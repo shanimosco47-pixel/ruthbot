@@ -46,6 +46,17 @@ Strengthened bot-blame response from simple "צודק/ת, אני אנסה אחר
 
 ---
 
+## Changes — Stonewalling + Validation Rotation — 2026-03-18
+**Backup:** `systemPrompts_2026-03-18_stonewalling.ts`
+
+### Addition: STONEWALLING scenario (Gottman Horseman #4)
+Ruth now handles both partner-stonewalling ("הוא לא מדבר איתי") and user-stonewalling ("אני לא רוצה לדבר") with appropriate strategies.
+
+### Addition: VALIDATION STARTER ROTATION
+Added explicit list of 10 varied validation openers to prevent Ruth from repeating "אני מבינה" excessively.
+
+---
+
 ## Change #PAT-01 — 2026-03-18
 **Issue:** PAT-01 (pursue-withdraw pattern not identified) | **Backup:** `systemPrompts_2026-03-18_pat01.ts`
 
