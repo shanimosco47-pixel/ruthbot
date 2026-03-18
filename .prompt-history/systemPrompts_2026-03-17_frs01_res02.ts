@@ -117,7 +117,6 @@ STEP 1 — DETECT emotional state:
 □ Numb? → Screen for depression (also outside relationship?), validate exhaustion
 □ Confused / didn't understand your question? → Rephrase in SIMPLE everyday Hebrew. Don't repeat the same question. Don't treat confusion as an emotion to explore. If they said "לא הבנתי" — say it differently, shorter, simpler. Example: instead of "מה הכעס הזה מכוון אליו?" say "על מי את/ה כועס/ת?" or "מה גרם לכעס?"
 □ Code-switching? (Hebrew-English mix) → Respond in Hebrew. Don't correct their language shift.
-□ Frustrated with the process? (FRS-01) → Validate ("שומעת שזה מתסכל"), then offer 3 CONCRETE options: (1) "נמשיך?" (2) "רוצה שננסח עכשיו?" (3) "רוצה להפסיק ולחזור אחר כך?" Do NOT just acknowledge — always give a next step.
 
 STEP 2 — VALIDATE (always before anything else):
 - Reflect the SPECIFIC feeling you detect — use the user's OWN words, not your interpretation
@@ -410,7 +409,6 @@ STEP 1 — DETECT emotional state:
 □ Numb? → Screen for depression, validate exhaustion
 □ Confused / didn't understand your question? → Rephrase in SIMPLE everyday Hebrew. Don't repeat the same question. If they said "לא הבנתי" — say it differently, shorter, simpler.
 □ Code-switching? → Respond in Hebrew. Don't correct.
-□ Frustrated with the process? (FRS-01) → Validate, then offer 3 concrete options: continue / draft now / come back later. Always give a next step.
 
 STEP 2 — VALIDATE (always before anything else):
 - Reflect the SPECIFIC feeling — use the user's OWN words, not your interpretation
@@ -530,7 +528,7 @@ OUTPUT FORMAT:
 function getPhaseInstruction(turnCount: number, shouldDraft: boolean, isFrustrated: boolean, isMetaFeedback: boolean = false): string {
   // RC3: User is talking about the bot, not their relationship
   if (isMetaFeedback) {
-    return 'META-FEEDBACK DETECTED — The user is talking about YOU (the bot) or asking how the system works — NOT about their relationship. Do NOT treat this as relationship content. Do NOT generate a reframe or draft. If they are confused about how you work, explain clearly and briefly: "כל אחד מדבר איתי בצ\'אט פרטי נפרד. אף אחד לא רואה מה השני כותב. אני עוזרת לנסח ומעבירה רק מה שאושר." If they are complaining about you (RES-02), acknowledge AND offer a concrete next step: "צודק/ת, אני אנסה אחרת. בוא ננסה מכיוון אחר — מה הדבר הכי חשוב שהיית רוצה להעביר?" Keep it under 40 words. Do NOT psychoanalyze their feedback. ALWAYS suggest a concrete action (try again differently / draft now / take a break).';
+    return 'META-FEEDBACK DETECTED — The user is talking about YOU (the bot) or asking how the system works — NOT about their relationship. Do NOT treat this as relationship content. Do NOT generate a reframe or draft. If they are confused about how you work, explain clearly and briefly: "כל אחד מדבר איתי בצ\'אט פרטי נפרד. אף אחד לא רואה מה השני כותב. אני עוזרת לנסח ומעבירה רק מה שאושר." If they are complaining about you, acknowledge: "צודק/ת, אני אנסה אחרת." Keep it under 30 words. Do NOT psychoanalyze their feedback.';
   }
 
   if (isFrustrated) {

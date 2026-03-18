@@ -28,6 +28,24 @@ INTAKE TURN 4 — Gather remaining details. ONE follow-up if needed.
 
 ---
 
+## Change #FRS-01 — 2026-03-17
+**Issue:** FRS-01 (frustration response lacks concrete options) | **Backup:** `systemPrompts_2026-03-17_frs01_res02.ts`
+
+### Addition: Frustration detection in STEP 1 — DETECT emotional state
+
+Added explicit frustration-with-process handling: validate + offer 3 concrete options (continue / draft now / come back later). Applied to both combined and standalone prompts.
+
+---
+
+## Change #RES-02 — 2026-03-17
+**Issue:** RES-02 (bot-blame response lacks concrete next action) | **Backup:** same as FRS-01
+
+### Modification: META-FEEDBACK DETECTED instruction
+
+Strengthened bot-blame response from simple "צודק/ת, אני אנסה אחרת" to include concrete next step: "בוא ננסה מכיוון אחר — מה הדבר הכי חשוב שהיית רוצה להעביר?" Always suggests an action.
+
+---
+
 ## Change #SAF-04 — 2026-03-17
 **Issue:** SAF-04 (coercive control patterns not flagged) | **Backup:** `systemPrompts_2026-03-17_saf04_coercive.ts`
 
