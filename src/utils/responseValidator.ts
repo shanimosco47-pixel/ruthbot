@@ -279,6 +279,11 @@ const FRUSTRATION_PHRASE_TRIGGERS = [
   'זה לא בשבילי',
   'אני לא מבין מה את רוצה',
   'אין טעם',
+  'לא מעניין אותי',
+  'בזבוז זמן',
+  'אני לא צריך את זה',
+  'אני לא צריכה את זה',
+  'לא בא לי',
 ];
 
 // Short word triggers: require word boundary to avoid false positives
@@ -287,7 +292,9 @@ const FRUSTRATION_WORD_TRIGGERS = [
   'עזבי',
   'די',
   'תפסיקי',
+  'תפסיק',
   'עזוב',
+  'חלאס',
 ];
 
 /**

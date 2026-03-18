@@ -302,6 +302,18 @@ describe('Component 3: Conversation Wisdom', () => {
       expect(detectFrustration('חבל על הזמן')).toBe(true);
     });
 
+    it('should detect "לא מעניין אותי" as frustration', () => {
+      expect(detectFrustration('לא מעניין אותי')).toBe(true);
+    });
+
+    it('should detect "חלאס" as frustration', () => {
+      expect(detectFrustration('חלאס')).toBe(true);
+    });
+
+    it('should detect "תפסיק" as frustration', () => {
+      expect(detectFrustration('תפסיק')).toBe(true);
+    });
+
     it('should NOT detect normal message as frustration', () => {
       expect(detectFrustration('היא כעסה שלא עזרתי במטבח')).toBe(false);
     });
