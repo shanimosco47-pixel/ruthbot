@@ -138,8 +138,18 @@ export async function handleMessage(ctx: Context): Promise<void> {
   } else if (activeSession.status === 'PENDING_PARTNER_CONSENT') {
     await ctx.reply('ההזמנה נשלחה — ממתינים לבן/בת הזוג. ברגע שיצטרפו, תקבל/י הודעה.');
   } else if (activeSession.status === 'REFLECTION_GATE') {
+    // Restore reframed content from DB for mirror evaluation later
+    const latestReframe = await prisma.message.findFirst({
+      where: { sessionId: activeSession.id, messageType: 'REFRAME', delivered: true },
+      orderBy: { createdAt: 'desc' },
+      select: { reframedContent: true },
+    });
+    let reframedContent = '';
+    if (latestReframe?.reframedContent) {
+      try { reframedContent = decrypt(latestReframe.reframedContent); } catch { /* skip */ }
+    }
     await ctx.reply('אתה בשלב השיקוף. מה לדעתך הדבר הכי חשוב עבור בן/בת הזוג שלך?');
-    await setUserState(telegramId, { state: 'reflection_gate_step1', sessionId: activeSession.id });
+    await setUserState(telegramId, { state: 'reflection_gate_step1', sessionId: activeSession.id, data: { reframedContent } });
   } else if (activeSession.status === 'PARTNER_DECLINED') {
     await ctx.reply('בן/בת הזוג בחר/ה שלא להצטרף. אפשר להמשיך בליווי אישי או להתחיל סשן חדש עם /start');
   } else {

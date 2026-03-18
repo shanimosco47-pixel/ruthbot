@@ -30,6 +30,7 @@ jest.mock('../../db/client', () => ({
     message: {
       create: jest.fn().mockResolvedValue({ id: 'msg1' }),
       findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     coupleSession: {
       findUnique: jest.fn(),
