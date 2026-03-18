@@ -142,6 +142,45 @@ function createMockMessageContext(text: string, telegramId: string = '12345') {
   } as any;
 }
 
+describe('handleMessage — user state routing', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should prompt /start when no active session and no state', async () => {
+    const ctx = createMockMessageContext('שלום', '12345');
+    mockGetUserState.mockResolvedValue(null);
+    mockFindOrCreateUser.mockResolvedValue('user1');
+    mockGetActiveSession.mockResolvedValue(null);
+
+    await handleMessage(ctx);
+
+    expect(ctx._replyMock).toHaveBeenCalledWith(
+      expect.stringContaining('/start')
+    );
+  });
+
+  it('should redirect to buttons when in invitation_draft_selection state', async () => {
+    const ctx = createMockMessageContext('שלום', '12345');
+    mockGetUserState.mockResolvedValue({
+      state: 'invitation_draft_selection',
+      sessionId: 'sess1',
+    });
+
+    await handleMessage(ctx);
+
+    expect(ctx._replyMock).toHaveBeenCalledWith(
+      expect.stringContaining('☝️')
+    );
+  });
+
+  it('should ignore invalid context (no from)', async () => {
+    const ctx = { message: { text: 'test' } } as any;
+    await handleMessage(ctx);
+    // Should not throw, just return silently
+  });
+});
+
 describe('handleMessage — session status routing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
