@@ -5,7 +5,7 @@ import { hmacHash } from '../../../utils/encryption';
 import { logger } from '../../../utils/logger';
 import { trackedReply, logBotMessage } from '../../../utils/trackedReply';
 
-const DISCLAIMER_HE = `⚖️ *לפני שמתחילים — חשוב שתדע/י:*
+const DISCLAIMER_HE = `⚖️ <b>לפני שמתחילים — חשוב שתדע/י:</b>
 
 • הבוט הזה הוא לא מטפל מורשה, פסיכולוג או מגשר משפטי.
 • תוכן שמשותף ישמש רק לצורך הסשן הנוכחי ולניתוח דפוסים אנונימי. הוא לא נמכר ולא משותף עם צד שלישי.
@@ -68,7 +68,7 @@ async function handleFreshStart(ctx: Context, telegramId: string, firstName: str
 
   // Show disclaimer
   await ctx.reply(DISCLAIMER_HE, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     ...Markup.inlineKeyboard([
       [Markup.button.callback('✅ אני מבין/ה ומסכים/ה', `disclaimer_accept:${telegramId}`)],
     ]),
@@ -119,7 +119,7 @@ async function handleDeepLinkStart(
 
   // Show disclaimer + consent button
   await ctx.reply(DISCLAIMER_HE, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     ...Markup.inlineKeyboard([
       [Markup.button.callback('✅ אני מבין/ה ומסכים/ה', `consent_accept:${sessionId}`)],
     ]),

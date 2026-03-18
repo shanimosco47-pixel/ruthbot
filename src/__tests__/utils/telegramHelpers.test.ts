@@ -1,4 +1,4 @@
-import { splitMessage, detectLanguage } from '../../utils/telegramHelpers';
+import { splitMessage, detectLanguage, escapeHtml, renderLinks, containsLinks } from '../../utils/telegramHelpers';
 
 describe('Telegram Helpers', () => {
   // ============================================
@@ -115,6 +115,89 @@ describe('Telegram Helpers', () => {
     it('should detect English for purely numeric/symbolic input', () => {
       // No Hebrew/Arabic chars → falls through to 'en'
       expect(detectLanguage('12345!@#$%')).toBe('en');
+    });
+  });
+
+  // ============================================
+  // escapeHtml
+  // ============================================
+  describe('escapeHtml', () => {
+    it('should escape ampersands', () => {
+      expect(escapeHtml('A & B')).toBe('A &amp; B');
+    });
+
+    it('should escape angle brackets', () => {
+      expect(escapeHtml('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert("xss")&lt;/script&gt;');
+    });
+
+    it('should handle text with no special chars', () => {
+      expect(escapeHtml('שלום עולם')).toBe('שלום עולם');
+    });
+
+    it('should escape all special chars together', () => {
+      expect(escapeHtml('a < b & c > d')).toBe('a &lt; b &amp; c &gt; d');
+    });
+  });
+
+  // ============================================
+  // containsLinks
+  // ============================================
+  describe('containsLinks', () => {
+    it('should detect http URLs', () => {
+      expect(containsLinks('visit http://example.com')).toBe(true);
+    });
+
+    it('should detect https URLs', () => {
+      expect(containsLinks('visit https://example.com/path')).toBe(true);
+    });
+
+    it('should return false for plain text', () => {
+      expect(containsLinks('שלום עולם, מה שלומך?')).toBe(false);
+    });
+
+    it('should return false for empty string', () => {
+      expect(containsLinks('')).toBe(false);
+    });
+  });
+
+  // ============================================
+  // renderLinks
+  // ============================================
+  describe('renderLinks', () => {
+    it('should wrap URLs in <a> tags', () => {
+      const result = renderLinks('visit https://example.com now');
+      expect(result).toBe('visit <a href="https://example.com">https://example.com</a> now');
+    });
+
+    it('should handle multiple URLs', () => {
+      const result = renderLinks('see https://a.com and https://b.com');
+      expect(result).toContain('<a href="https://a.com">https://a.com</a>');
+      expect(result).toContain('<a href="https://b.com">https://b.com</a>');
+    });
+
+    it('should HTML-escape surrounding text', () => {
+      const result = renderLinks('A & B: https://example.com');
+      expect(result).toBe('A &amp; B: <a href="https://example.com">https://example.com</a>');
+    });
+
+    it('should return HTML-escaped text when no URLs present', () => {
+      const result = renderLinks('שלום < עולם');
+      expect(result).toBe('שלום &lt; עולם');
+    });
+
+    it('should handle URLs with query params', () => {
+      const result = renderLinks('link: https://example.com/path?a=1&b=2');
+      expect(result).toContain('<a href="https://example.com/path?a=1&amp;b=2">');
+    });
+
+    it('should not include trailing punctuation in URL', () => {
+      const result = renderLinks('see https://example.com.');
+      expect(result).toBe('see <a href="https://example.com">https://example.com</a>.');
+    });
+
+    it('should handle Telegram deep links', () => {
+      const result = renderLinks('🔗 לחצ/י כאן: https://t.me/RuthCoupleBot?start=abc123');
+      expect(result).toContain('<a href="https://t.me/RuthCoupleBot?start=abc123">');
     });
   });
 });
