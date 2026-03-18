@@ -7,7 +7,7 @@ import { generateSessionEmbedding, updateSessionTelemetry } from '../../services
 import { extractUserFacts } from '../../services/memory/userMemoryService';
 import { decrypt } from '../../utils/encryption';
 import { logger } from '../../utils/logger';
-import { splitMessage } from '../../utils/telegramHelpers';
+import { splitMessage, renderLinks } from '../../utils/telegramHelpers';
 import type { ConversationMessage } from '../../types';
 import type { TopicCategory } from '../../config/constants';
 
@@ -290,20 +290,20 @@ async function sendTelegramSummary(
   summary: SummaryResult,
   role: string
 ): Promise<void> {
-  const personalSection = `🪞 *המסע האישי שלך:*\n${summary.personalSummary}`;
-  const sharedSection = `🤝 *מחויבויות משותפות:*\n${summary.sharedCommitments}`;
+  const personalSection = `🪞 <b>המסע האישי שלך:</b>\n${summary.personalSummary}`;
+  const sharedSection = `🤝 <b>מחויבויות משותפות:</b>\n${summary.sharedCommitments}`;
   const encouragementSection = `\n${summary.encouragement}`;
-  const ctaSection = '\n💬 *רוצים להמשיך?* הקלד/י /start לסשן נוסף.';
+  const ctaSection = '\n💬 <b>רוצים להמשיך?</b> הקלד/י /start לסשן נוסף.';
 
   const fullSummary = `${personalSection}\n\n${sharedSection}\n${encouragementSection}\n${ctaSection}`;
 
   for (const chunk of splitMessage(fullSummary)) {
     try {
-      await bot.telegram.sendMessage(telegramId, chunk, { parse_mode: 'Markdown' });
+      await bot.telegram.sendMessage(telegramId, renderLinks(chunk), { parse_mode: 'HTML' });
     } catch (error) {
-      // Fallback: send without markdown
+      // Fallback: send without HTML
       try {
-        await bot.telegram.sendMessage(telegramId, chunk.replace(/\*/g, ''));
+        await bot.telegram.sendMessage(telegramId, chunk.replace(/<[^>]+>/g, ''));
       } catch (innerError) {
         logger.error('Failed to send summary to user', {
           telegramId,

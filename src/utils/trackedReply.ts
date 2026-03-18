@@ -2,6 +2,7 @@ import { Context } from 'telegraf';
 import { prisma } from '../db/client';
 import { encrypt } from './encryption';
 import { logger } from './logger';
+import { containsLinks, renderLinks } from './telegramHelpers';
 import type { SenderRole } from '@prisma/client';
 
 /**
@@ -13,6 +14,9 @@ import type { SenderRole } from '@prisma/client';
  *
  * For messages outside a session context, pass sessionId = null
  * and the message is sent but not stored (no orphan rows).
+ *
+ * Auto-renders URLs as clickable links using HTML parse_mode when
+ * the text contains URLs and no parse_mode is explicitly set.
  */
 export async function trackedReply(
   ctx: Context,
@@ -25,8 +29,12 @@ export async function trackedReply(
 ): Promise<void> {
   const { sessionId = null, senderRole = 'USER_A', extra } = opts;
 
+  // Auto-render links: if text has URLs and no parse_mode is set, use HTML
+  const extraWithLinks = applyLinkRendering(text, extra);
+  const renderedText = extraWithLinks.rendered ? renderLinks(text) : text;
+
   // Send the message first — user experience is priority
-  await ctx.reply(text, extra);
+  await ctx.reply(renderedText, extraWithLinks.extra);
 
   // Store in DB if we have a session context
   if (sessionId) {
@@ -73,4 +81,22 @@ export async function logBotMessage(
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/**
+ * If text contains URLs and no parse_mode is already set, inject HTML parse_mode.
+ * Returns the updated extra options and whether link rendering was applied.
+ */
+function applyLinkRendering(
+  text: string,
+  extra?: Parameters<Context['reply']>[1]
+): { extra: Parameters<Context['reply']>[1]; rendered: boolean } {
+  const hasParseMode = extra && 'parse_mode' in extra && (extra as Record<string, unknown>).parse_mode;
+  if (hasParseMode || !containsLinks(text)) {
+    return { extra, rendered: false };
+  }
+  return {
+    extra: { ...extra, parse_mode: 'HTML' as const },
+    rendered: true,
+  };
 }

@@ -6,7 +6,7 @@ import { callClaude } from '../../../services/ai/claudeClient';
 // import { requiresPayment, createCheckoutSession } from '../../../services/billing/stripeService';
 // import { env } from '../../../config/env';
 import { logger } from '../../../utils/logger';
-import { splitMessage } from '../../../utils/telegramHelpers';
+import { splitMessage, renderLinks, containsLinks } from '../../../utils/telegramHelpers';
 import { decrypt, encrypt } from '../../../utils/encryption';
 import { prisma } from '../../../db/client';
 import { trackedReply, logBotMessage } from '../../../utils/trackedReply';
@@ -289,7 +289,8 @@ async function handleTtlChoice(ctx: Context, telegramId: string, data: string): 
     architectureExplanation + `\n\n` +
     `🔗 לחצ/י כאן כדי להתחיל: ${link}`;
 
-  await ctx.reply(`📋 הודעת ההזמנה מוכנה — העתק/י ושלח/י לבן/בת הזוג:\n\n${forwardableText}`);
+  const inviteDisplay = `📋 הודעת ההזמנה מוכנה — העתק/י ושלח/י לבן/בת הזוג:\n\n${forwardableText}`;
+  await ctx.reply(renderLinks(inviteDisplay), { parse_mode: 'HTML' });
 
   // Step 2: Explicit instruction + timed reminder — no "sent" language
   const ttlLabel = ttlHours === 1 ? 'שעה אחת' : ttlHours === 3 ? '3 שעות' : '12 שעות';
@@ -791,7 +792,11 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
     const deliveryMessage = `💌 בן/בת הזוג שלך רוצה לשתף אותך:\n\n${pending.reframedText}`;
 
     for (const chunk of splitMessage(deliveryMessage)) {
-      await ctx.telegram.sendMessage(recipientTelegramId, chunk);
+      if (containsLinks(chunk)) {
+        await ctx.telegram.sendMessage(recipientTelegramId, renderLinks(chunk), { parse_mode: 'HTML' });
+      } else {
+        await ctx.telegram.sendMessage(recipientTelegramId, chunk);
+      }
     }
 
     // RC0: Log the delivered message in the recipient's context

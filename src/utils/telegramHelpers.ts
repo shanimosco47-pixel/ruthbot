@@ -1,5 +1,55 @@
 import { TELEGRAM_MAX_MESSAGE_LENGTH } from '../config/constants';
 
+// URL regex — matches http(s) URLs in plain text, avoiding trailing punctuation
+const URL_REGEX = /https?:\/\/[^\s<>"')\]]+[^\s<>"')\].,;:!?]/g;
+
+/**
+ * Escape special HTML characters for Telegram HTML parse_mode.
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Convert plain-text URLs to clickable HTML <a> links for Telegram.
+ * Text is HTML-escaped first, then URLs are wrapped in <a> tags.
+ */
+export function renderLinks(text: string): string {
+  // Extract URLs before escaping so we get the raw URLs
+  const urls: { start: number; end: number; url: string }[] = [];
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(URL_REGEX.source, 'g');
+  while ((match = regex.exec(text)) !== null) {
+    urls.push({ start: match.index, end: match.index + match[0].length, url: match[0] });
+  }
+
+  if (urls.length === 0) {
+    return escapeHtml(text);
+  }
+
+  // Build result by escaping non-URL parts and wrapping URLs in <a> tags
+  let result = '';
+  let lastIndex = 0;
+  for (const { start, end, url } of urls) {
+    result += escapeHtml(text.slice(lastIndex, start));
+    result += `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
+    lastIndex = end;
+  }
+  result += escapeHtml(text.slice(lastIndex));
+
+  return result;
+}
+
+/**
+ * Check if text contains any plain-text URLs.
+ */
+export function containsLinks(text: string): boolean {
+  return new RegExp(URL_REGEX.source).test(text);
+}
+
 /**
  * Split a long message into chunks that fit Telegram's 4096 char limit.
  * Splits at paragraph boundaries when possible.
