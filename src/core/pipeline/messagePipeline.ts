@@ -34,7 +34,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   if (!rawText || rawText.trim().length === 0) {
     return {
       riskLevel: 'L1',
-      topicCategory: 'GENERAL' as PipelineResult['topicCategory'],
+      topicCategory: 'משהו שחשוב לי לשתף',
       coachingResponse: 'לא קיבלתי הודעה. נסה/י שוב.',
       reframedMessage: null,
       requiresApproval: false,

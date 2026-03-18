@@ -776,10 +776,18 @@ async function deliverToPartner(ctx: Context, pending: PendingReframe): Promise<
 async function handleFrustrationChoice(ctx: Context, telegramId: string, data: string): Promise<void> {
   const parts = parseCallbackData(data, 3);
   if (!parts) { await ctx.reply('אירעה שגיאה. נסה/י שוב.'); return; }
-  const templateType = parts[1] as MessageTemplate; // 'apology', 'boundary', 'future_rule'
+  const templateType = parts[1];
   const sessionId = parts[2];
 
-  const template = getMessageTemplate(templateType);
+  // Validate template type before use
+  const validTemplates: MessageTemplate[] = ['apology', 'boundary', 'future_rule'];
+  if (!validTemplates.includes(templateType as MessageTemplate)) {
+    logger.warn('Invalid frustration template type', { templateType, telegramId });
+    await ctx.reply('אירעה שגיאה. נסה/י שוב.');
+    return;
+  }
+
+  const template = getMessageTemplate(templateType as MessageTemplate);
 
   // Determine the sender's actual role (could be User A or User B)
   const userId = await SessionManager.findOrCreateUser(telegramId);
