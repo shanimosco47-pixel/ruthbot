@@ -11,6 +11,7 @@ import { decrypt, encrypt } from '../../../utils/encryption';
 import { prisma } from '../../../db/client';
 import { trackedReply, logBotMessage } from '../../../utils/trackedReply';
 import { MAX_EDIT_ITERATIONS } from '../../../config/constants';
+import { recordInterventionOutcome } from '../../../services/memory/interventionTracker';
 import { getMessageTemplate } from '../../../utils/responseValidator';
 import type { MessageTemplate } from '../../../utils/responseValidator';
 import type { PendingReframe } from '../../../types';
@@ -528,6 +529,20 @@ async function handleReframeApprove(ctx: Context, telegramId: string, data: stri
     // Partner not yet in session — message queued for delivery when they join
     await trackedReply(ctx, '✅ ההודעה אושרה ונשמרה. היא תועבר לבן/בת הזוג בצ\'אט הפרטי שלהם ברגע שיפתחו את הלינק.', { sessionId: pending.sessionId, senderRole: pending.senderRole });
   }
+
+  // Record intervention outcome (non-blocking telemetry)
+  const session = await prisma.coupleSession.findUnique({
+    where: { id: pending.sessionId },
+    select: { anonymizedCoupleId: true },
+  });
+  if (session) {
+    recordInterventionOutcome({
+      anonymizedCoupleId: session.anonymizedCoupleId,
+      interventionType: 'reframe',
+      outcome: pending.editIterations > 0 ? 'edited_approved' : 'approved',
+      editCount: pending.editIterations,
+    }).catch(() => {});
+  }
 }
 
 async function handleReframeEdit(ctx: Context, telegramId: string, data: string): Promise<void> {
@@ -594,6 +609,21 @@ async function handleReframeCancel(ctx: Context, telegramId: string, data: strin
     state: 'coaching',
     sessionId: currentState?.sessionId,
   }, 'reframe-cancel');
+
+  // Record intervention outcome (non-blocking telemetry)
+  if (pending.sessionId) {
+    const session = await prisma.coupleSession.findUnique({
+      where: { id: pending.sessionId },
+      select: { anonymizedCoupleId: true },
+    });
+    if (session) {
+      recordInterventionOutcome({
+        anonymizedCoupleId: session.anonymizedCoupleId,
+        interventionType: 'reframe',
+        outcome: 'cancelled',
+      }).catch(() => {});
+    }
+  }
 }
 
 // ============================================

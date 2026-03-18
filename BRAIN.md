@@ -1,15 +1,15 @@
 # BRAIN.md — Operational Memory for RuthBot
 
 > מקס 150 שורות. רק מידע שסשן עתידי צריך. היסטוריית גרסאות — ב-git log.
-> Last updated: 2026-03-18 (V3.3 deployed)
+> Last updated: 2026-03-18 (V3.4 memory system)
 
 ---
 
-## Current Status: V3.3 — LIVE ON RENDER
+## Current Status: V3.4 — Memory System (not yet deployed)
 - **URL:** https://ruthbot.onrender.com
 - **Health:** https://ruthbot.onrender.com/health → `v3.3`
 - **Keep-alive:** UptimeRobot pings /health every 5 min
-- **Tests:** 262 passing, 0 failing
+- **Tests:** 281 passing, 0 failing
 - **Training score:** V2 44→90.3 | V3 benchmark 7.38 pessimistic (est. 7.9-8.4)
 
 ---
@@ -104,11 +104,23 @@ npx prisma studio      # Visual DB browser
 
 ---
 
+## Memory System (V3.4)
+- **UserMemory** table: per-user facts (encrypted AES-256), extracted at session close via Claude
+- **InterventionOutcome** table: telemetry on reframe approve/edit/cancel (no PII)
+- **SessionEmbedding** extended: recurring_themes, intervention_methods, sessionNumber
+- **User** extended: totalSessionCount, lastSessionAt
+- **Pipeline**: user memory prefetched in parallel, injected into coaching prompt
+- **Welcome back**: returning users see session count on /start
+- **GDPR**: deleteUserMemories runs in /delete_my_data transaction
+- **Training export**: `src/services/memory/trainingExport.ts` — anonymized data for trainer bot
+- **Schema change pending**: run `npx prisma db push` on Supabase to apply
+
 ## Pending Work
-1. **Real-world testing** — test with actual Telegram conversations
-2. **Stripe/payment** — need Israeli processor or international alternative
-3. **Resend email** — sign up, get key, verify domain
-4. **Continue training** — run trainer_bot on V3.3
+1. **DB push** — `npx prisma db push` to apply new UserMemory + InterventionOutcome tables
+2. **Real-world testing** — test with actual Telegram conversations
+3. **Stripe/payment** — need Israeli processor or international alternative
+4. **Resend email** — sign up, get key, verify domain
+5. **Continue training** — run trainer_bot on V3.4
 
 ---
 

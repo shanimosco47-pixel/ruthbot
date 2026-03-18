@@ -5,6 +5,25 @@
 
 ---
 
+## Change #MEM-01 — 2026-03-18 (User Memory Injection)
+**Feature:** User memory system — facts extracted at session close, injected into coaching prompt
+**Backup:** `systemPrompts_2026-03-18_user_memory.ts`
+
+### Diff 1: `buildCombinedRiskCoachingPrompt()` — params extended
+
+**Added parameter:** `userMemoryContext?: string | null`
+
+### Diff 2: Dynamic part — User Memory line added after Patterns
+
+**Added:**
+```
+User Memory: ${userMemoryContext || 'First session — no prior history.'}
+```
+
+**Rationale:** Provides Ruth with structured context about the user (family, attachment style, recurring topics) from previous sessions. Enables personalized coaching without re-asking basic questions. Zero latency impact — memory is prefetched in parallel with conversation history.
+
+---
+
 ## Change #BRV-02/03 — 2026-03-17
 **Issue:** BRV-02/03 (multiple questions in greeting) | **Backup:** `systemPrompts_2026-03-17_brv02_intake_fix.ts`
 

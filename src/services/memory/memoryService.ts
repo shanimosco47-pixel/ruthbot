@@ -8,6 +8,8 @@ import type { TopicCategory } from '../../config/constants';
 interface SessionSummaryWithTags {
   summary: string;
   emotion_tags: string[];
+  recurring_themes: string[];
+  intervention_methods: string[];
 }
 import OpenAI from 'openai';
 
@@ -68,9 +70,11 @@ export async function generateSessionEmbedding(params: {
       .filter((line): line is string => line !== null)
       .join('\n');
 
-    // Single Claude call for both summary and emotion tags (was 2 separate calls)
+    // Single Claude call for summary, emotion tags, themes, and methods
     let summary: string;
     let emotionTags: string[];
+    let recurringThemes: string[] = [];
+    let interventionMethods: string[] = [];
 
     try {
       const result = await callClaudeJSON<SessionSummaryWithTags>({
@@ -88,10 +92,14 @@ OUTPUT FORMAT:
 Return ONLY valid JSON:
 {
   "summary": "the semantic summary text",
-  "emotion_tags": ["tag1", "tag2"]
+  "emotion_tags": ["tag1", "tag2"],
+  "recurring_themes": ["theme1", "theme2"],
+  "intervention_methods": ["method1", "method2"]
 }
 
-emotion_tags: 2-4 dominant emotion patterns, e.g.: "fear_of_abandonment", "loneliness", "need_for_recognition", "frustration", "rejection", "betrayal", "control", "disconnection".`,
+emotion_tags: 2-4 dominant emotion patterns, e.g.: "fear_of_abandonment", "loneliness", "need_for_recognition", "frustration", "rejection", "betrayal", "control", "disconnection".
+recurring_themes: 1-3 recurring conflict themes, e.g.: "division_of_labor", "finances", "intimacy", "in_laws", "parenting".
+intervention_methods: 1-3 methods used, e.g.: "NVC_reframe", "EFT_softening", "grounding", "frustration_menu", "reflection_gate".`,
         userMessage: `Session topic: ${topicCategory}\n\nConversation:\n${conversationText}`,
         maxTokens: 512,
         sessionId,
@@ -101,11 +109,15 @@ emotion_tags: 2-4 dominant emotion patterns, e.g.: "fear_of_abandonment", "lonel
       emotionTags = Array.isArray(result.emotion_tags) && result.emotion_tags.length > 0
         ? result.emotion_tags
         : ['unclassified'];
+      recurringThemes = Array.isArray(result.recurring_themes) ? result.recurring_themes : [];
+      interventionMethods = Array.isArray(result.intervention_methods) ? result.intervention_methods : [];
     } catch {
       // Fallback: if JSON parsing fails, the summary is unusable for embedding
       logger.warn('Session summary JSON parse failed, using fallback', { sessionId });
       summary = `Session about ${topicCategory}. Communication patterns could not be analyzed.`;
       emotionTags = ['unclassified'];
+      recurringThemes = [];
+      interventionMethods = [];
     }
 
     // Find telemetry record — required for FK constraint
@@ -133,6 +145,8 @@ emotion_tags: 2-4 dominant emotion patterns, e.g.: "fear_of_abandonment", "lonel
         sessionTelemetryId: telemetry.id,
         summary,
         dominantEmotionTags: emotionTags,
+        recurringThemes,
+        interventionMethods,
         userRole,
       },
     });

@@ -51,9 +51,10 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
   // ================================================
   // Step 1: DB prefetch (parallel, no API calls)
   // ================================================
-  const [conversationHistory, patternSummaries] = await Promise.all([
+  const [conversationHistory, patternSummaries, userMemoryContext] = await Promise.all([
     getConversationHistory(context.sessionId),
     getPatternSummaries(context.anonymizedCoupleId, rawText),
+    getUserMemoryContext(context.currentUserId),
   ]);
 
   // ================================================
@@ -135,6 +136,7 @@ export async function processMessage(input: PipelineInput): Promise<PipelineResu
     shouldDraft,
     isFrustrated,
     isMetaFeedback,
+    userMemoryContext,
   });
 
   // Store user message (await with retry — message loss is unacceptable for mediation)
@@ -348,6 +350,23 @@ async function getPatternSummaries(anonymizedCoupleId: string, currentMessage?: 
     anonymizedCoupleId,
     currentMessage: currentMessage || '',
   });
+}
+
+/**
+ * Get formatted user memory context for prompt injection.
+ * Returns null for first-time users — zero latency for cold users.
+ */
+async function getUserMemoryContext(userId: string): Promise<string | null> {
+  try {
+    const { formatMemoryForPrompt } = await import('../../services/memory/userMemoryService');
+    return await formatMemoryForPrompt(userId);
+  } catch (error) {
+    logger.warn('Failed to load user memory context, proceeding without', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 /**

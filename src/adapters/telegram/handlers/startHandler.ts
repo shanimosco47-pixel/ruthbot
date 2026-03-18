@@ -55,6 +55,17 @@ async function handleFreshStart(ctx: Context, telegramId: string, firstName: str
     return;
   }
 
+  // Check if returning user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { totalSessionCount: true },
+  });
+
+  if (user && user.totalSessionCount > 0) {
+    const sessionLabel = user.totalSessionCount === 1 ? 'הפעם השנייה' : `הפעם ה-${user.totalSessionCount + 1}`;
+    await ctx.reply(`שמחה לראות אותך שוב 💛 ${firstName}, זו ${sessionLabel} שלך.`);
+  }
+
   // Show disclaimer
   await ctx.reply(DISCLAIMER_HE, {
     parse_mode: 'Markdown',
@@ -63,7 +74,7 @@ async function handleFreshStart(ctx: Context, telegramId: string, firstName: str
     ]),
   });
 
-  logger.info('Disclaimer shown to new user', { telegramId });
+  logger.info('Disclaimer shown to user', { telegramId, isReturning: (user?.totalSessionCount ?? 0) > 0 });
 }
 
 async function handleDeepLinkStart(

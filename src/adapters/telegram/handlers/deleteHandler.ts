@@ -89,6 +89,11 @@ export async function handleDeleteConfirmation(ctx: Context, telegramId: string)
         where: { telegramId },
       });
 
+      // Delete user memories (PII layer)
+      await tx.userMemory.deleteMany({
+        where: { userId: targetUserId },
+      });
+
       await tx.user.delete({
         where: { id: targetUserId },
       });

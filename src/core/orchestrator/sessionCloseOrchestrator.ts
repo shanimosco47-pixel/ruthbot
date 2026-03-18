@@ -4,6 +4,7 @@ import { prisma } from '../../db/client';
 import { callClaudeJSON } from '../../services/ai/claudeClient';
 import { buildSessionSummaryPrompt } from '../../services/ai/systemPrompts';
 import { generateSessionEmbedding, updateSessionTelemetry } from '../../services/memory/memoryService';
+import { extractUserFacts } from '../../services/memory/userMemoryService';
 import { decrypt } from '../../utils/encryption';
 import { logger } from '../../utils/logger';
 import { splitMessage } from '../../utils/telegramHelpers';
@@ -191,6 +192,35 @@ export async function orchestrateSessionClose(
     topicCategory,
   });
 
+  // Extract user facts (parallel for both users) — non-critical, don't block close
+  const factExtractionPromises: Promise<void>[] = [
+    extractUserFacts({
+      sessionId,
+      userId: session.userAId,
+      userRole: 'USER_A',
+      conversationHistory,
+      topicCategory,
+    }),
+  ];
+  if (session.userB) {
+    factExtractionPromises.push(
+      extractUserFacts({
+        sessionId,
+        userId: session.userBId!,
+        userRole: 'USER_B',
+        conversationHistory,
+        topicCategory,
+      }),
+    );
+  }
+  await Promise.allSettled(factExtractionPromises);
+
+  // Update user session metadata (totalSessionCount, lastSessionAt)
+  await updateUserSessionMetadata(session.userAId);
+  if (session.userBId) {
+    await updateUserSessionMetadata(session.userBId);
+  }
+
   // Update telemetry
   await updateSessionTelemetry({
     anonymizedCoupleId: session.anonymizedCoupleId,
@@ -300,6 +330,31 @@ async function hasNewerActiveSession(userId: string, afterDate: Date): Promise<b
     select: { id: true },
   });
   return newerSession !== null;
+}
+
+async function updateUserSessionMetadata(userId: string): Promise<void> {
+  try {
+    // Count closed sessions for this user (as A or B)
+    const sessionCount = await prisma.coupleSession.count({
+      where: {
+        OR: [{ userAId: userId }, { userBId: userId }],
+        status: 'CLOSED',
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        totalSessionCount: sessionCount,
+        lastSessionAt: new Date(),
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to update user session metadata', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function getMaxRiskLevel(levels: string[]): string {

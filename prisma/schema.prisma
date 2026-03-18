@@ -22,6 +22,8 @@ model User {
   language          String   @default("he") // detected language
   stripeCustomerId     String?  @map("stripe_customer_id") // AES-256 encrypted
   stripeCustomerIdHash String?  @unique @map("stripe_customer_id_hash") // HMAC for lookup
+  totalSessionCount Int       @default(0) @map("total_session_count")
+  lastSessionAt     DateTime? @map("last_session_at")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -29,6 +31,7 @@ model User {
   sessionsAsUserA   CoupleSession[] @relation("UserA")
   sessionsAsUserB   CoupleSession[] @relation("UserB")
   billingOwner      CoupleSession[] @relation("BillingOwner")
+  memories          UserMemory[]
 
   @@map("users")
 }
@@ -148,6 +151,9 @@ model SessionEmbedding {
   sessionTelemetryId    String   @map("session_telemetry_id")
   summary               String   // semantic summary, no PII
   dominantEmotionTags   String[] @map("dominant_emotion_tags")
+  recurringThemes       String[] @default([]) @map("recurring_themes")
+  interventionMethods   String[] @default([]) @map("intervention_methods")
+  sessionNumber         Int      @default(1) @map("session_number")
   userRole              String   @map("user_role") // A or B
   // vector field added via raw SQL migration for pgvector
   createdAt             DateTime @default(now()) @map("created_at")
@@ -195,6 +201,48 @@ model UserFlowState {
 
   @@index([sessionId])
   @@map("user_flow_states")
+}
+
+// ============================================
+// USER MEMORY — PII Layer (Encrypted)
+// ============================================
+
+model UserMemory {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  category        String   // attachment_style | family_context | recurring_topic | communication_pattern | preference
+  factKey         String   @map("fact_key")
+  factValue       String   @map("fact_value")   // AES-256 encrypted
+  confidence      Float    @default(0.8)
+  sourceSessionId String?  @map("source_session_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, category, factKey])
+  @@index([userId])
+  @@map("user_memories")
+}
+
+// ============================================
+// INTERVENTION OUTCOMES — Telemetry Layer (No PII)
+// ============================================
+
+model InterventionOutcome {
+  id                    String   @id @default(uuid())
+  anonymizedCoupleId    String   @map("anonymized_couple_id")
+  interventionType      String   @map("intervention_type")  // reframe | coaching | frustration_menu
+  topicCategory         String?  @map("topic_category")
+  riskLevel             String?  @map("risk_level")
+  outcome               String   // approved | edited_approved | cancelled | ignored
+  editCount             Int      @default(0) @map("edit_count")
+  turnNumber            Int?     @map("turn_number")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@index([anonymizedCoupleId])
+  @@index([interventionType, outcome])
+  @@map("intervention_outcomes")
 }
 
 // ============================================
