@@ -607,6 +607,8 @@ async function handlePartnerDeclinedChoice(ctx: Context, telegramId: string, dat
   const sessionId = parts[2];
 
   if (choice === 'reminder') {
+    // Send typing indicator while generating reminder (hat 15: perf)
+    await ctx.sendChatAction('typing');
     // Generate soft reminder text
     const reminderText = await callClaude({
       systemPrompt: 'Generate a warm, zero-pressure reminder text in Hebrew for someone to send to their partner about joining a mediation session. Keep it under 2 sentences. Return ONLY the text.',
