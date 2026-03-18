@@ -390,6 +390,17 @@ async function handleConsentAccept(ctx: Context, telegramId: string, data: strin
 
   // NOW we can store User B's data (GDPR: only after consent)
   const userId = await SessionManager.findOrCreateUser(telegramId, ctx.from?.first_name);
+
+  // Guard: prevent User B from joining multiple sessions simultaneously
+  const existingSession = await SessionManager.getActiveSession(userId);
+  if (existingSession && existingSession.id !== sessionId) {
+    logger.warn('User B already has an active session, rejecting join', {
+      telegramId, existingSessionId: existingSession.id, newSessionId: sessionId,
+    });
+    await ctx.reply('יש לך סשן פעיל כרגע. סיים/י אותו קודם לפני שמצטרפ/ת לסשן חדש.');
+    return;
+  }
+
   // recordPartnerConsent already transitions to REFLECTION_GATE internally
   await SessionManager.recordPartnerConsent(sessionId, userId);
 
