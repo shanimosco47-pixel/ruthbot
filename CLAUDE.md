@@ -30,7 +30,7 @@ export CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true
 ---
 
 ## 15 כובעים — פרספקטיבות חובה
-לפני שינוי משמעותי, קרא את `docs/HATS_CHECKLIST.md` ועבור על הכובעים הרלוונטיים.
+לפני כל שינוי בקוד, קרא את `docs/HATS_CHECKLIST.md` ובדוק את הכובעים הרלוונטיים לשינוי.
 TODO שנוצר מכובע — רשום בקוד ודווח.
 
 ---
