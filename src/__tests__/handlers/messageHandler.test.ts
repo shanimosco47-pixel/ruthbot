@@ -184,7 +184,7 @@ describe('handleMessage — session status routing', () => {
     );
   });
 
-  it('should give clear message for CLOSED session', async () => {
+  it('should give helpful message for PARTNER_DECLINED status', async () => {
     const ctx = createMockMessageContext('שלום', '12345');
     mockGetUserState.mockResolvedValue(null);
     mockFindOrCreateUser.mockResolvedValue('user1');
@@ -192,31 +192,13 @@ describe('handleMessage — session status routing', () => {
       id: 'sess1',
       anonymizedCoupleId: 'anon1',
       role: 'USER_A',
-      status: 'CLOSED',
+      status: 'PARTNER_DECLINED',
     });
 
     await handleMessage(ctx);
 
     expect(ctx._replyMock).toHaveBeenCalledWith(
-      expect.stringContaining('/start')
-    );
-  });
-
-  it('should give clear message for LOCKED session', async () => {
-    const ctx = createMockMessageContext('שלום', '12345');
-    mockGetUserState.mockResolvedValue(null);
-    mockFindOrCreateUser.mockResolvedValue('user1');
-    mockGetActiveSession.mockResolvedValue({
-      id: 'sess1',
-      anonymizedCoupleId: 'anon1',
-      role: 'USER_A',
-      status: 'LOCKED',
-    });
-
-    await handleMessage(ctx);
-
-    expect(ctx._replyMock).toHaveBeenCalledWith(
-      expect.stringContaining('/start')
+      expect.stringContaining('בן/בת הזוג')
     );
   });
 });

@@ -140,8 +140,8 @@ export async function handleMessage(ctx: Context): Promise<void> {
   } else if (activeSession.status === 'REFLECTION_GATE') {
     await ctx.reply('אתה בשלב השיקוף. מה לדעתך הדבר הכי חשוב עבור בן/בת הזוג שלך?');
     await setUserState(telegramId, { state: 'reflection_gate_step1', sessionId: activeSession.id });
-  } else if (activeSession.status === 'CLOSED' || activeSession.status === 'LOCKED') {
-    await ctx.reply('הסשן הסתיים. אפשר להתחיל סשן חדש עם /start ❤️');
+  } else if (activeSession.status === 'PARTNER_DECLINED') {
+    await ctx.reply('בן/בת הזוג בחר/ה שלא להצטרף. אפשר להמשיך בליווי אישי או להתחיל סשן חדש עם /start');
   } else {
     await ctx.reply('הסשן נמצא במצב שלא מאפשר הודעות כרגע.');
   }
