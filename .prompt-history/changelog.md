@@ -46,6 +46,15 @@ Strengthened bot-blame response from simple "צודק/ת, אני אנסה אחר
 
 ---
 
+## Change #PAT-01 — 2026-03-18
+**Issue:** PAT-01 (pursue-withdraw pattern not identified) | **Backup:** `systemPrompts_2026-03-18_pat01.ts`
+
+### Addition: PURSUE-WITHDRAW PATTERN section
+
+Added explicit instructions for recognizing and naming the pursue-withdraw dynamic. Ruth now names the circular pattern in simple Hebrew, helps the pursuer slow down and the withdrawer articulate their experience, and frames it as a shared pattern rather than blaming either partner.
+
+---
+
 ## Change #SAF-04 — 2026-03-17
 **Issue:** SAF-04 (coercive control patterns not flagged) | **Backup:** `systemPrompts_2026-03-17_saf04_coercive.ts`
 
