@@ -61,12 +61,29 @@ export async function getPendingReframe(messageId: string): Promise<PendingRefra
     where: { messageId },
   });
   if (!row) return null;
+
+  let reframedText: string;
+  let originalText: string;
+  try {
+    reframedText = decrypt(row.reframedText);
+    originalText = decrypt(row.originalText);
+  } catch (error) {
+    logger.error('Failed to decrypt pending reframe data', {
+      messageId,
+      sessionId: row.sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Delete corrupted record to prevent repeated failures
+    await prisma.pendingReframeState.deleteMany({ where: { messageId } });
+    return null;
+  }
+
   return {
     sessionId: row.sessionId,
     senderRole: row.senderRole as 'USER_A' | 'USER_B',
     ownerTelegramId: row.ownerTelegramId,
-    reframedText: decrypt(row.reframedText),
-    originalText: decrypt(row.originalText),
+    reframedText,
+    originalText,
     editIterations: row.editIterations,
     messageId: row.messageId,
   };
