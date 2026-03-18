@@ -83,6 +83,10 @@ export function createBot(): Telegraf {
           });
         });
 
+        // Clean up state only after successful close
+        await cleanupSessionState(activeSession.id);
+        await deleteUserState(telegramId);
+
         await ctx.reply('הסשן נסגר. תודה שהשתמשת ברות בוט זוגיות ❤️\nאפשר תמיד להתחיל מחדש עם /start');
       } catch (error) {
         logger.error('/stop transition failed', {
@@ -92,10 +96,6 @@ export function createBot(): Telegraf {
         });
         await ctx.reply('לא ניתן לסגור את הסשן במצבו הנוכחי.');
       }
-
-      // Clean up all DB-persisted state for this session and user
-      await cleanupSessionState(activeSession.id);
-      await deleteUserState(telegramId);
     });
   });
 
