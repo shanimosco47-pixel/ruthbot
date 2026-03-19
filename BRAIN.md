@@ -5,9 +5,9 @@
 
 ---
 
-## Current Status: V3.4 — Memory System (not yet deployed)
+## Current Status: V3.4 — Memory System (deployed)
 - **URL:** https://ruthbot.onrender.com
-- **Health:** https://ruthbot.onrender.com/health → `v3.3`
+- **Health:** https://ruthbot.onrender.com/health → `v3.4`
 - **Keep-alive:** UptimeRobot pings /health every 5 min
 - **Tests:** 281 passing, 0 failing
 - **Training score:** V2 44→90.3 | V3 benchmark 7.38 pessimistic (est. 7.9-8.4)
@@ -116,7 +116,7 @@ npx prisma studio      # Visual DB browser
 - **Schema change pending**: run `npx prisma db push` on Supabase to apply
 
 ## Pending Work
-1. **DB push** — `npx prisma db push` to apply new UserMemory + InterventionOutcome tables
+1. **DB push** — `npx prisma db push` to apply new UserMemory + InterventionOutcome tables ⚠️ run from local machine with .env
 2. **Real-world testing** — test with actual Telegram conversations
 3. **Stripe/payment** — need Israeli processor or international alternative
 4. **Resend email** — sign up, get key, verify domain

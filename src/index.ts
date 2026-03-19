@@ -123,7 +123,7 @@ async function main(): Promise<void> {
       try {
         await prisma.$queryRawUnsafe('SELECT 1');
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', version: 'v3.3', timestamp: new Date().toISOString() }));
+        res.end(JSON.stringify({ status: 'ok', version: 'v3.4', timestamp: new Date().toISOString() }));
       } catch (dbError) {
         logger.error('Health check DB failure', { error: dbError instanceof Error ? dbError.message : String(dbError) });
         res.writeHead(503, { 'Content-Type': 'application/json' });
