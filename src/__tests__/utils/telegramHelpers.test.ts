@@ -112,9 +112,14 @@ describe('Telegram Helpers', () => {
       expect(detectLanguage('שלום world זו הודעה test')).toBe('he');
     });
 
-    it('should detect English for purely numeric/symbolic input', () => {
-      // No Hebrew/Arabic chars → falls through to 'en'
-      expect(detectLanguage('12345!@#$%')).toBe('en');
+    it('should default to Hebrew for short non-Hebrew input', () => {
+      // Short text without Hebrew/Arabic → defaults to 'he' (Israeli bot)
+      expect(detectLanguage('12345!@#$%')).toBe('he');
+      expect(detectLanguage('OK')).toBe('he');
+    });
+
+    it('should detect English for long English-only text', () => {
+      expect(detectLanguage('Hello world, this is a longer sentence')).toBe('en');
     });
   });
 

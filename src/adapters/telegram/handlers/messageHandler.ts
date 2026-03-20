@@ -584,7 +584,7 @@ async function handleCoachingMessage(
       text,
     });
 
-    const language = detectLanguage(text);
+    const language = text.replace(/\s/g, '').length >= 10 ? detectLanguage(text) : 'he';
 
     // Fetch full session for correct userAId/userBId
     const fullSession = await SessionManager.getSession(sessionId);

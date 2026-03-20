@@ -108,5 +108,8 @@ export function detectLanguage(text: string): string {
 
   if (hebrewCount / totalChars > 0.3) return 'he';
   if (arabicCount / totalChars > 0.3) return 'ar';
+
+  // Default to Hebrew — this is an Israeli bot. Only return 'en' for clearly English text (>10 chars).
+  if (totalChars <= 10) return 'he';
   return 'en';
 }
