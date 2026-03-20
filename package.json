@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "test": "jest --passWithNoTests",
-    "lint": "eslint src/ --ext .ts"
+    "lint": "eslint src/ --ext .ts",
+    "read-chats": "npx ts-node --transpile-only scripts/read-chats.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",

@@ -8,8 +8,8 @@ export CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true
 ```
 
 ## לוג שיחות — קרא אוטומטית
-**בתחילת כל סשן**, קרא את `logs/chat.log` (אם קיים) לראות שיחות אחרונות מטלגרם.
-**אחרי כל שיחת טלגרם שהמשתמש מזכיר** — קרא את `logs/chat.log` אוטומטית.
+**בתחילת כל סשן**, קרא את `logs/chat.log` (אם קיים). אם לא קיים, הרץ: `npm run read-chats -- --write`
+**אחרי כל שיחת טלגרם שהמשתמש מזכיר** — הרץ `npm run read-chats -- --write` וקרא את `logs/chat.log`.
 
 ## BRAIN.md — חובה לעדכן
 קרא את `BRAIN.md` בתחילת כל סשן — מידע תפעולי (DB, API keys, deployment).
