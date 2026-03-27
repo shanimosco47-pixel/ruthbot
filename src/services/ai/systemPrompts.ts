@@ -1,7 +1,7 @@
 import { TOPIC_CATEGORIES, TopicCategory, RiskLevel, EMERGENCY_RESOURCES } from '../../config/constants';
 import type { ConversationMessage } from '../../types';
 
-/** Split system prompt for Anthropic prompt caching. */
+/** Split system prompt into static + dynamic parts. */
 export interface SplitSystemPrompt {
   staticPart: string;
   dynamicPart: string;
@@ -72,7 +72,7 @@ export function buildCombinedRiskCoachingPrompt(params: {
   const phaseInstruction = getPhaseInstruction(turnCount, shouldDraft, isFrustrated, isMetaFeedback);
 
   // Static part: instructions, rules, methodology — identical across all calls.
-  // Cached by Anthropic for ~90% input token savings on cache hits (5-min TTL).
+  // Static part is separated for maintainability — identical across all calls.
   // V3 DEPLOYED: 2026-03-04 — Full training pipeline output (145 conversations, 20 benchmarks, 2 improvement iterations)
   const staticPart = `=== RUTH V3 COMBINED RISK + COACHING ===
 

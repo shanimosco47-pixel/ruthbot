@@ -37,7 +37,7 @@ export async function classifyRisk(params: {
       userMessage: message,
       maxTokens: 512,
       sessionId,
-      // Uses default model (env.CLAUDE_MODEL) — Haiku not available on this API key
+      // Uses default model (env.OPENAI_MODEL)
     });
 
     // Validate with Zod

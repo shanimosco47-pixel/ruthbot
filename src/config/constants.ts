@@ -47,9 +47,13 @@ export const MAX_EDIT_ITERATIONS = 3;
 export const MAX_REFLECTION_REPROMPTS = 2;
 
 // Retry configuration
-export const CLAUDE_MAX_RETRIES = 2;
-export const CLAUDE_INITIAL_RETRY_DELAY_MS = 1000;
+export const LLM_MAX_RETRIES = 2;
+export const LLM_INITIAL_RETRY_DELAY_MS = 1000;
 export const WHISPER_MAX_RETRIES = 1;
+
+// Legacy aliases (used in tests/imports that still reference old names)
+export const CLAUDE_MAX_RETRIES = LLM_MAX_RETRIES;
+export const CLAUDE_INITIAL_RETRY_DELAY_MS = LLM_INITIAL_RETRY_DELAY_MS;
 
 // TTL options in hours
 export const TTL_OPTIONS = [1, 3, 12] as const;

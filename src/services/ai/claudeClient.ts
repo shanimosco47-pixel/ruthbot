@@ -1,13 +1,13 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
-import { CLAUDE_MAX_RETRIES, CLAUDE_INITIAL_RETRY_DELAY_MS } from '../../config/constants';
+import { LLM_MAX_RETRIES, LLM_INITIAL_RETRY_DELAY_MS } from '../../config/constants';
 
-const CLAUDE_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds per request (CLAUDE.md requirement)
+const LLM_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds per request
 
-const client = new Anthropic({
-  apiKey: env.ANTHROPIC_API_KEY,
-  timeout: CLAUDE_REQUEST_TIMEOUT_MS,
+const client = new OpenAI({
+  apiKey: env.OPENAI_API_KEY,
+  timeout: LLM_REQUEST_TIMEOUT_MS,
 });
 
 function sleep(ms: number): Promise<void> {
@@ -19,49 +19,45 @@ export interface ClaudeCallOptions {
   userMessage: string;
   maxTokens?: number;
   sessionId?: string;
-  model?: string; // Override model for specific calls (e.g., haiku for risk)
-  staticSystemPrefix?: string; // Static system prompt prefix for Anthropic prompt caching
+  model?: string;
+  staticSystemPrefix?: string; // Kept for API compatibility — concatenated into system prompt
 }
 
 /**
- * Call Claude with exponential backoff retry.
+ * Call OpenAI with exponential backoff retry.
  * Max 2 retries (1s, 2s). After that, throw.
  */
 export async function callClaude(options: ClaudeCallOptions): Promise<string> {
   const { systemPrompt, userMessage, maxTokens = 2048, sessionId, model, staticSystemPrefix } = options;
 
-  for (let attempt = 0; attempt <= CLAUDE_MAX_RETRIES; attempt++) {
-    try {
-      // Build system parameter with optional prompt caching.
-      // When staticSystemPrefix is provided, the static instructions are sent
-      // with cache_control so Anthropic caches them (~90% cheaper on cache hits).
-      const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [];
-      if (staticSystemPrefix) {
-        systemBlocks.push({ type: 'text', text: staticSystemPrefix, cache_control: { type: 'ephemeral' } });
-        if (systemPrompt) {
-          systemBlocks.push({ type: 'text', text: systemPrompt });
-        }
-      }
+  // Combine static prefix and dynamic system prompt
+  const fullSystemPrompt = staticSystemPrefix
+    ? staticSystemPrefix + (systemPrompt ? '\n\n' + systemPrompt : '')
+    : systemPrompt;
 
-      const response = await client.messages.create({
-        model: model || env.CLAUDE_MODEL,
+  for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+    try {
+      const response = await client.chat.completions.create({
+        model: model || env.OPENAI_MODEL,
         max_tokens: maxTokens,
-        system: systemBlocks.length > 0 ? systemBlocks : systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
+        messages: [
+          { role: 'system', content: fullSystemPrompt },
+          { role: 'user', content: userMessage },
+        ],
       });
 
-      const textBlock = response.content.find((block) => block.type === 'text');
-      if (!textBlock || textBlock.type !== 'text') {
-        throw new Error('No text content in Claude response');
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No text content in OpenAI response');
       }
 
-      return textBlock.text;
+      return content;
     } catch (error) {
-      const isLastAttempt = attempt === CLAUDE_MAX_RETRIES;
+      const isLastAttempt = attempt === LLM_MAX_RETRIES;
 
-      logger.error('Claude API call failed', {
+      logger.error('OpenAI API call failed', {
         attempt: attempt + 1,
-        maxRetries: CLAUDE_MAX_RETRIES,
+        maxRetries: LLM_MAX_RETRIES,
         sessionId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -71,26 +67,26 @@ export async function callClaude(options: ClaudeCallOptions): Promise<string> {
       }
 
       // Exponential backoff with jitter to prevent thundering herd
-      const baseDelay = CLAUDE_INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      const baseDelay = LLM_INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
       const jitter = Math.random() * baseDelay * 0.5;
       const delayMs = Math.round(baseDelay + jitter);
-      logger.info(`Retrying Claude call in ${delayMs}ms`, { attempt: attempt + 1, sessionId });
+      logger.info(`Retrying OpenAI call in ${delayMs}ms`, { attempt: attempt + 1, sessionId });
       await sleep(delayMs);
     }
   }
 
   // TypeScript needs this, but it should never reach here
-  throw new Error('Claude API call failed after all retries');
+  throw new Error('OpenAI API call failed after all retries');
 }
 
 /**
- * Call Claude expecting JSON output (for Risk Engine, Mirror Evaluation, etc.)
+ * Call OpenAI expecting JSON output.
  * Parses the response and returns the parsed object.
  */
 export async function callClaudeJSON<T>(options: ClaudeCallOptions): Promise<T> {
   const response = await callClaude(options);
 
-  // Extract JSON from response (Claude may wrap in markdown code blocks)
+  // Extract JSON from response (model may wrap in markdown code blocks)
   let jsonStr = response.trim();
 
   // Remove markdown code block if present
@@ -102,10 +98,10 @@ export async function callClaudeJSON<T>(options: ClaudeCallOptions): Promise<T> 
   try {
     return JSON.parse(jsonStr) as T;
   } catch {
-    logger.error('Failed to parse Claude JSON response', {
+    logger.error('Failed to parse OpenAI JSON response', {
       response: response.substring(0, 500),
       sessionId: options.sessionId,
     });
-    throw new Error(`Failed to parse Claude JSON response: ${response.substring(0, 200)}`);
+    throw new Error(`Failed to parse OpenAI JSON response: ${response.substring(0, 200)}`);
   }
 }

@@ -16,7 +16,6 @@
     "read-chats": "npx ts-node --transpile-only scripts/read-chats.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0",
     "@prisma/client": "^5.22.0",
     "dotenv": "^16.4.5",
     "openai": "^4.73.0",

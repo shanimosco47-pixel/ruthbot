@@ -29,14 +29,12 @@
 - **pgvector:** enabled
 - **Prisma:** uses `directUrl` for migrations (pgBouncer compatibility)
 
-### AI — Anthropic Claude
-- **Model:** `claude-sonnet-4-20250514`
-- **IMPORTANT:** Haiku models NOT available (404). Only Sonnet works.
-- **Key:** `.env` → `ANTHROPIC_API_KEY`
-
-### AI — OpenAI
-- **Used for:** Whisper-1 (voice) + text-embedding-3-small (pgvector)
+### AI — OpenAI (all AI services)
+- **LLM Model:** `gpt-4o` (env: `OPENAI_MODEL`)
+- **Voice:** Whisper-1 (transcription)
+- **Embeddings:** text-embedding-3-small (pgvector)
 - **Key:** `.env` → `OPENAI_API_KEY`
+- **Note:** Migrated from Anthropic Claude to OpenAI on 2026-03-27
 
 ### Encryption
 - **Algorithm:** AES-256-GCM (column-level, format: `gcm:iv:authTag:ciphertext`)
@@ -62,7 +60,7 @@ npm run build && node dist/index.js
 ```
 
 ### Important: dotenv Override
-Empty `ANTHROPIC_API_KEY` env var blocks dotenv. Fix already in code: `dotenv.config({ override: true })`
+dotenv configured with `override: true` to prevent env var shadowing issues.
 
 ### Database Reset
 ```bash
@@ -87,7 +85,6 @@ npx prisma studio      # Visual DB browser
 ---
 
 ## Known Limitations
-- Haiku models return 404 — use Sonnet only
 - Supabase hostname is `aws-1` not `aws-0`
 - Multiple node processes → 409 Conflict (kill stale processes)
 
@@ -105,7 +102,7 @@ npx prisma studio      # Visual DB browser
 ---
 
 ## Memory System (V3.4)
-- **UserMemory** table: per-user facts (encrypted AES-256), extracted at session close via Claude
+- **UserMemory** table: per-user facts (encrypted AES-256), extracted at session close via OpenAI
 - **InterventionOutcome** table: telemetry on reframe approve/edit/cancel (no PII)
 - **SessionEmbedding** extended: recurring_themes, intervention_methods, sessionNumber
 - **User** extended: totalSessionCount, lastSessionAt

@@ -58,7 +58,7 @@ setInterval(() => webhookRateLimiter.cleanup(), 5 * 60_000);
 async function main(): Promise<void> {
   logger.info('RuthBot starting...', {
     nodeEnv: env.NODE_ENV,
-    model: env.CLAUDE_MODEL,
+    model: env.OPENAI_MODEL,
   });
 
   // Create bot

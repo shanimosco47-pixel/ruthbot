@@ -8,12 +8,9 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
 
-  // Anthropic Claude
-  ANTHROPIC_API_KEY: z.string().min(1, 'ANTHROPIC_API_KEY is required'),
-  CLAUDE_MODEL: z.string().default('claude-sonnet-4-20250514'),
-
-  // OpenAI (Whisper)
+  // OpenAI (LLM + Whisper + Embeddings)
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
+  OPENAI_MODEL: z.string().default('gpt-4o'),
 
   // Database
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),

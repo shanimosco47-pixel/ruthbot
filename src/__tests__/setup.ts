@@ -3,7 +3,6 @@
  * Sets environment variables needed by env.ts Zod validation.
  */
 process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
-process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
 process.env.OPENAI_API_KEY = 'test-openai-key';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/couplebot_test';
 process.env.STRIPE_SECRET_KEY = 'sk_test_real_key_for_testing';

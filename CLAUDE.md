@@ -56,7 +56,7 @@ TODO שנוצר מכובע — רשום בקוד ודווח.
 ---
 
 ## סטק טכני
-Node.js 20 LTS, TypeScript strict, Telegraf v4, Claude API (claude-sonnet-4-6), Whisper-1, PostgreSQL 15+ (pgvector), Prisma, Stripe (webhooks), Resend, dotenv+Zod
+Node.js 20 LTS, TypeScript strict, Telegraf v4, OpenAI API (gpt-4o, Whisper-1, text-embedding-3-small), PostgreSQL 15+ (pgvector), Prisma, Stripe (webhooks), Resend, dotenv+Zod
 
 ## כללים טכניים מחייבים
 - **TypeScript:** strict: true, אסור any, return type מפורש, Zod לנתונים חיצוניים
