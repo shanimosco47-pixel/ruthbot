@@ -4,7 +4,7 @@ import { logger } from '../../utils/logger';
 import { CATEGORY_RESOURCES } from '../../config/constants';
 import type { SessionSummaryEmail } from '../../types';
 
-const PLACEHOLDER_KEYS = ['re_test_fake', 'placeholder', 'your_resend_api_key'];
+const PLACEHOLDER_KEYS = ['re_test_fake', 're_placeholder', 'placeholder', 'your_resend_api_key'];
 
 function isEmailConfigured(): boolean {
   return !PLACEHOLDER_KEYS.includes(env.EMAIL_API_KEY);
