@@ -8,6 +8,8 @@ import { extractUserFacts } from '../../services/memory/userMemoryService';
 import { decrypt } from '../../utils/encryption';
 import { logger } from '../../utils/logger';
 import { splitMessage, renderLinks } from '../../utils/telegramHelpers';
+import { reviewSession } from '../../services/training/supervisorReview';
+import { updateLessonsFromReview } from '../../services/training/lessonManager';
 import type { ConversationMessage } from '../../types';
 import type { TopicCategory } from '../../config/constants';
 
@@ -234,6 +236,20 @@ export async function orchestrateSessionClose(
     riskEventsCount: session.riskEvents.length,
     maxRiskLevel: getMaxRiskLevel(session.riskEvents.map((e) => e.riskLevel)),
   });
+
+  // Fire-and-forget: supervisor review for continuous improvement
+  reviewSession({ sessionId, conversationHistory })
+    .then((results) => {
+      if (results.length > 0) {
+        updateLessonsFromReview(results);
+      }
+    })
+    .catch((err) => {
+      logger.warn('Supervisor review failed (non-critical)', {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
   logger.info('Session close orchestration completed', { sessionId });
   } catch (error) {

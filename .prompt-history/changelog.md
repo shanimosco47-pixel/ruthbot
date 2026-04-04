@@ -5,6 +5,24 @@
 
 ---
 
+## Change #TRAIN-SESSION-2 — 2026-04-04 (SHA-346 — Technique Invisibility)
+**Feature:** Add Response Rhythm Variation section to break formulaic validate→question pattern
+**Baseline:** 8.89 avg, technique=8.20 (weakest), validate→question used in 15/20 scenarios
+
+### Root cause:
+Technique scores 8 in 15/20 scenarios because Ruth always follows the same shape: validate sentence + question. The therapeutic framework is visible to users. Expert-level therapy makes the framework invisible by varying response rhythm.
+
+### Edits applied:
+1. **systemPrompts.ts (combined prompt)** — Added full RESPONSE RHYTHM VARIATION section with 6 response shapes (A-F), rotation rules, and rhythm constraints (max 2 questions in 5 turns, mandatory no-question turns after 2 consecutive question turns)
+2. **systemPrompts.ts (standalone coaching prompt)** — Added condensed rhythm variation section
+3. **session_lessons_injection.txt** — Added rhythm repetition corrective lesson
+
+### Expected impact:
+- Technique dimension should rise from 8.20 to 8.5+ as Ruth varies response structure
+- Users should experience Ruth as a wise friend, not a structured session
+
+---
+
 ## Change #TRAIN-SESSION-1 — 2026-04-04 (SHA-346 — Targeted Training Session)
 **Feature:** Add corrective examples for Weaponized Draft + Guilt-Trip; fix In-Laws tag question
 **Baseline:** Corrective-9 benchmark 8.9 avg, S05 lowest at 8.6, safety_100 criteria failed
