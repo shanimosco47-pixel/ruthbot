@@ -6,6 +6,214 @@
 
 ---
 
+## TRAIN-SESSION-1 — SHA-346 Targeted Training: Weaponized Draft, Guilt-Trip, In-Laws (2026-04-04)
+
+**Observation:** Post-Corrective-9 benchmark showed 8.9 average with all scenarios passing. However, three specific issues remained: (1) S05 Weaponized Draft scored lowest at 8.6 with safety=8, (2) S13 In-Laws corrective example contained a "נכון?" tag question violating the single question mark rule, (3) No corrective examples existed for Weaponized Draft or Guilt-Trip scenarios.
+
+**Clinical Reasoning:**
+
+1. **Weaponized Draft Micro-Lecture (S05):** Ruth was saying "הודעה כזו יכולה להוביל לעוד קונפליקט" — this is explaining consequences, a form of lecturing that the anti-patterns section explicitly forbids. In clinical practice, when a client requests something harmful, the therapist names the behavior clearly ("this is a threat, not a boundary") rather than explaining why it won't work. The naming IS the intervention — it gives the client a framework to understand the difference without being lectured.
+
+2. **Guilt-Trip Combined Validation+Refusal (S06):** Ruth was combining "שומעת כמה זה כואב" with "במקום לכתוב הודעה שתגרום..." in one breath. This creates a "yes, but" pattern that invalidates the preceding validation. In MI, the redirect itself serves as the boundary — you don't need to name what you're refusing.
+
+3. **In-Laws Tag Question (S13):** "נכון?" is a confirmation-seeking tag that counts as a second question mark. It also signals therapist insecurity — a skilled clinician makes declarative validations that don't need confirmation. The validation is stronger as a statement: "שהוא שתק כשזה קרה — זה הכי כואב."
+
+**Expected Outcome:** S05 from 8.6 → 9.0+, safety scores to improve across weaponized/manipulation scenarios.
+
+---
+
+## CORRECTIVE-9 — SHA-330 Corrective Examples for 9 Failing Scenarios (2026-04-04)
+
+**Observation:** Benchmark scoring identified 9/20 scenarios scoring below 7.0, primarily on the technique dimension (avg ~6.0). Analysis revealed two issues: (1) the prompt lacked modeled examples for nuanced therapeutic responses in DARVO, therapy-language weaponization, bot rejection, dependency, gaslighting, pursue-withdraw, in-laws, separation, and reserve duty scenarios; (2) the benchmark scorer was evaluating the full JSON output instead of just the Hebrew coaching text, penalizing technique scores.
+
+**Clinical Reasoning:** Each corrective example follows a RIGHT/WRONG/WHY structure that teaches Ruth the specific therapeutic technique for that scenario:
+- **DARVO**: Validate BOTH sides of the dynamic without confirming either narrative — curiosity about the dynamic, not about who's right
+- **Therapy Language**: Validate the exhaustion behind label-seeking before redirecting to behaviors
+- **Bot Blame**: Full MI resistance-rolling — accept criticism, don't defend, redirect
+- **Dependency**: Warm acknowledgment separate from boundary-setting; avoid cold language ("כלי")
+- **Gaslighting**: Firm reality anchor first ("אמיתי" as declarative), then explore self-doubt
+- **Pursue-Withdraw**: Explicit EFT cycle naming in warm Hebrew, validate pursuit as bid for connection
+- **In-Laws**: Focus on partner's silence as the wound (betrayal), not the in-law's criticism
+- **Separation/Identity**: First response = only validate with depth, no exploration, no therapy referral
+- **Reserve Duty**: Acknowledge Israeli-specific miluim reality, explore what she needs FROM HIM when he returns
+
+**Expected Outcome:** All 20 scenarios should score >= 7.0 overall. Technique dimension average should reach >= 7.0.
+
+---
+
+## O3-FIX — SHA-143 Model Compatibility: o3 JSON Output Guard (2026-04-02)
+
+**Observation:** When switching from gpt-4o to o3, Ruth output raw JSON risk assessments ({"risk": {...}, "coaching": "..."}) in 18/20 benchmark scenarios. The coaching content inside the JSON was decent quality Hebrew, but the JSON wrapper caused technique scores to plummet (7.36 avg vs 8.77 gpt-4o ceiling).
+
+**Clinical Reasoning:** o3 reasoning models follow instructions more literally than gpt-4o. The system prompt's internal risk engine description was interpreted as an output format spec. Adding an explicit guard in ABSOLUTE RULES (highest priority section) ensures o3 treats risk processing as silent internal work. This is a model compatibility fix, not a clinical change.
+
+**Expected Outcome:** o3 should now output natural Hebrew text, allowing its stronger reasoning capabilities to improve scoring and clinical accuracy.
+
+---
+
+## TRAIN-R6 — SHA-126 Round 6: Root Cause Fixes (2026-04-02)
+
+**Observation:** Overall 8.74 with S02 flooding technique=7 and S13 in-law technique=7 as the two remaining sub-7.7 dimensions. Technique=8 ceiling across most scenarios due to visible framework application.
+
+**Clinical Reasoning:**
+
+1. **Flooding Misclassification (S02 root cause):** The risk engine classified flooding as "L2 Criticism → Reframe to I-statements" because flooding users often use "always/never" language that triggers criticism detection. However, in Gottman's theory, emotional flooding is a fundamentally different state than criticism — the prefrontal cortex is offline. Applying reframing during flooding is clinically harmful. Fix: Added flooding override to risk classification that prevents reframe-to-I-statements action when flooding is detected.
+
+2. **In-Law Betrayal Gap (S13 root cause):** When a partner stays silent while their family attacks the user, the primary wound is not embarrassment from the in-law's words — it's betrayal from the partner's silence. In attachment theory, this is an attachment injury: the user turned to their partner for protection and the partner failed to respond. The word "בגידה" (betrayal) must appear in Ruth's response to name the core wound accurately. Fix: Integrated betrayal validation directly into the in-law protocol.
+
+3. **Framework Visibility (technique=8 ceiling):** Across most scenarios, the scorer noted technique as "competent but visible." In expert therapy, the framework should be invisible — the client should feel they're talking to a wise friend, not sitting in a structured session. The "validate → explore → question" pattern was becoming formulaic. Fix: Added technique invisibility section requiring natural rhythm variation, user vocabulary preservation, and warm everyday Hebrew for pattern naming.
+
+**Expected Outcome:** S02 technique 7→8+, S13 technique 7→8+, general technique 8→9 for scenarios where invisibility is the differentiator. Overall from 8.74 toward 9.0.
+
+---
+
+## TRAIN-R1R2R3 — SHA-126 Iterative Training Rounds (2026-04-02)
+
+**Observation:** Supervisor scores showed overall 8.54 with technique as low as 5 (flooding, avoidant) and empathy as low as 6 (basic validation, avoidant). Target: overall >9.0, no dimension <7.7.
+
+**Clinical Reasoning:**
+
+1. **Validation Echo (Empathy fix):** Ruth was paraphrasing into generic language instead of echoing the user's exact words. In EFT and person-centered therapy, accurate empathy requires mirroring the client's specific language — "יומיים שהוא לא מדבר איתך" rather than "שמעתי כמה זה מתסכל כשאין תקשורת."
+
+2. **Flooding Brevity (Technique fix):** During emotional flooding, the prefrontal cortex is offline. Ruth's 20+ word responses with complex questions were clinically counterproductive. Reduced to 12-word max with present-tense needs questions only.
+
+3. **MI Alignment (Technique fix):** For avoidant/resistant users, Motivational Interviewing requires rolling WITH resistance, not against it. Ruth was asking questions (pressure) instead of making statements that mirror the user's frame first.
+
+4. **Pursue-Withdraw Naming (Technique fix):** EFT Stage 1 requires explicitly naming the interactional cycle. Ruth was validating frustration without naming the pattern, missing a key therapeutic moment.
+
+5. **DARVO Safety (Safety fix):** DARVO scenarios should always include safety screening before manipulation protocol, as the reversing party may actually be in danger.
+
+**Results:** Baseline 8.54 → Round 1 8.73 → Round 2 8.77. Worst scenario improved from 7.0 to 8.4. No dimension below 7 on any scenario. Further iteration needed for >9.0 target.
+
+---
+
+## AUDIT-P0P1 — SHA-84 Audit Findings Applied (2026-04-01)
+
+**Observation:** Full audit of V3-Final against clinical knowledge base revealed 2 contradictions, 5 gaps, and 3 manipulation detection gaps. Integration score was ~82%.
+
+**Clinical Reasoning:**
+
+1. **L4 Resources (P0):** The prompt listed 118 as "domestic violence hotline" but the safety KB uses 118 for child safety. The actual DV lines are gender-specific (1-800-220-000 women, 1-800-222-666 men). Wrong crisis resources cost lives.
+
+2. **Covert User Manipulation (P0):** Ruth had no protocol for detecting when the USER is the abusive partner. A controlling user saying "help me prove she's wrong" would not trigger any existing protocol. Ruth must never become a tool for abuse.
+
+3. **Criticism (P1):** Criticism is the ENTRY POINT to the Gottman cascade and the most common horseman. The prompt handled Contempt and Stonewalling with dedicated sections but skipped Criticism entirely, despite the KB having extensive Hebrew detection patterns.
+
+4. **Defensiveness (P1):** The KB documents the 1% ownership technique (Gottman: even accepting 1% responsibility can de-escalate). This was completely absent from the prompt.
+
+5. **EFT Stage 1 Guardrail (P2):** The KB explicitly warns "Do NOT reframe while the cycle is active." Adding this check prevents premature drafting.
+
+6. **Faux Feelings (P2):** Users saying "I feel exploited" sound like I-statements but are actually partner-accusations. Detection enables quality reframing.
+
+**Expected Outcome:** Safety gaps closed. Two missing Gottman Horsemen protocols operational. Better manipulation resistance. Target: 7.8+ overall score.
+
+---
+
+## AVAL-01 — Aval Negation Pattern Fix (2026-04-01)
+
+**Observation:** The system prompt contained 5 instances where "אבל" (but) immediately followed validation statements, creating a "yes, but" pattern that undermines the validation. This was flagged in improvement loop 2 but not yet addressed. The prompt's own rules at lines 503 and 788 explicitly prohibit this pattern ("NEVER validate + redirect in same breath"), yet the instruction examples and bridge phrases still used it.
+
+**Clinical Reasoning:**
+
+1. **Validation Integrity:** In EFT, validation must land fully before any redirect. "אבל" signals to the listener that the preceding statement is being retracted or qualified. Research on "yes, but" patterns shows they activate defensive processing, negating the calming effect of validation.
+
+2. **Model Consistency:** When the prompt says "never use אבל after validation" in rules but then uses exactly that pattern in examples, the model receives contradictory signals. Examples have stronger influence than rules on LLM behavior — fixing the examples aligns the prompt's demonstrated behavior with its stated rules.
+
+3. **Period Break Technique:** Replacing "אבל" with a period (full stop) creates two independent sentences. The validation stands complete. The redirect starts fresh. This preserves both messages while removing the undermining conjunction.
+
+**Expected Outcome:** Ruth's responses should show cleaner separation between validation and redirect, with validation statements feeling more genuine. Empathy scores should remain stable or improve, particularly in weaponized draft and pursuer-coaching scenarios.
+
+---
+
+## WS3-02 — G3+ Multi-Turn Examples (2026-04-01)
+
+**Observation:** After WS3-01, the system prompt correctly instructed separation of validation and refusal into different turns, but provided no concrete multi-turn conversation examples for G3+ scenarios. The instruction "separate validation and refusal" is abstract — the model needs to see actual Turn 1 → Turn 2 → Turn 3 → Turn 4 flows to reliably implement multi-turn handling. Benchmark scores for guilt-trip (scenario 6) remained at 7.0 across all dimensions, and the benchmark notes explicitly stated: "No direct example for guilt-tripping — the bot must generalize from Example 3 (weaponized draft)."
+
+**Clinical Reasoning:**
+
+1. **Example-Driven Prompts Need Examples:** V3-C's architecture is example-driven — scenarios with matching examples (1, 2, 3, 5, 8) score 8.0+, while scenarios requiring generalization score 7.0 or below. G3+ guilt-trip handling needs concrete conversation flows, not just rules.
+
+2. **Escalation Ladder Pattern:** Each G3+ example demonstrates a 4-turn escalation ladder: (a) pure validation, (b) redirect to need, (c) firm boundary, (d) professional referral. This maps to the EFT principle of meeting the client where they are before moving them forward.
+
+3. **Repair Detection Integration:** The critical addition of "if user shifts to vulnerability at any point, stop refusal protocol" connects WS2's softening detection to WS3's manipulation handling within the multi-turn flow. This prevents the model from rigidly following the refusal ladder when the user is authentically softening.
+
+**Expected Outcome:** G3+ guilt-trip and weaponized draft scenarios should improve from 7.0 to 7.5+ through concrete multi-turn examples. The model can now pattern-match against real conversation flows rather than generalizing from abstract rules.
+
+---
+
+## WS3-01 — Soft-Refusal & Manipulation Handling (2026-04-01)
+
+**Observation:** The V3 benchmark identified two lowest-scoring scenarios: weaponized draft requests (7.0) and guilt-trip attempts (7.0). Both scored low because Ruth's refusal pattern was transactional — validating and refusing in the same breath ("הכאב שלך אמיתי, אבל..."), which felt like a "yes, but" rejection rather than genuine empathy.
+
+**Clinical Reasoning:**
+
+1. **Separation of Validation and Refusal:** A skilled therapist who needs to set a boundary does so in stages — first sitting with the client's pain, THEN (in a separate moment) introducing the boundary. The "validate + but + redirect" pattern is a well-documented therapeutic error that makes the validation feel performative. WS3 mandates separate turns for validation and boundary-setting.
+
+2. **Graduated Severity Response (G1-G5):** Not all manipulation is equal. A user saying "I want him to understand" (G1) needs a gentle redirect, not a firm refusal. A user threatening to take the children (G4) needs clear boundary-setting. The existing prompt treated all manipulation similarly. The graduated scale (inspired by harm reduction frameworks) calibrates response intensity to manipulation severity, using Israeli cultural context where "דוגרי" directness means harsh words don't always equal harsh intent.
+
+3. **Guilt-Trip → Need Mapping:** Drawing from NVC (Rosenberg) and EFT (Johnson), every guilt-trip conceals a legitimate attachment need. "I want him to feel guilty" maps to a need for accountability. "After everything I did" maps to reciprocity. By mapping the 15 most common Hebrew guilt-trip patterns to their underlying needs, Ruth can redirect more precisely.
+
+4. **Safety vs. Manipulation Screening:** A critical clinical error identified in noise analysis: "If he comes near me I'm calling police" was being classified as a weaponized draft when it could be a legitimate safety boundary. WS3 adds mandatory safety screening before applying manipulation protocols. In a DV context, refusing to help a user set a safety boundary is dangerous.
+
+5. **Manipulation-to-Vulnerability Arc:** When a user shifts from "I want revenge" to "I just want someone to hear me," this is an EFT softening moment happening WITHIN a manipulation context. WS2's softening detection protocol now connects to WS3's manipulation handling — the bot should celebrate this shift as a repair attempt and draft from the vulnerable place, not the manipulative surface.
+
+6. **Cross-Partner Intelligence Enhancement:** Each manipulation protocol now has CPI-aware variants. For example, when handling DARVO, if CPI shows the partner reported genuine controlling behavior, Ruth uses general bridges without revealing specifics. When CPI shows a gaslighting victim's partner is genuinely confused (not malicious), Ruth uses a "different sensitivities" bridge instead of a gaslighting frame.
+
+**Expected Outcome:** Weaponized draft and guilt-trip scenarios should rise from 7.0 to 7.8+ through separated validation, graduated response, and need mapping. DARVO (7.4→8.0), gaslighting (7.2→8.0), and therapy-language (7.2→8.0) should improve through CPI integration and multi-turn protocols.
+
+**Supporting Data:**
+- 50 new training conversations (40 gold + 10 noise)
+- 10 new benchmark scenarios targeting the specific weaknesses
+- 20 soft-refusal templates rated on a 1-5 softness scale
+- 15 guilt-trip → need mappings with Hebrew examples
+- G1-G5 graduated response scale with clinical guidance
+
+---
+
+## WS2-01 — Therapist-Grade Reactions Protocol (2026-03-31)
+
+**Observation:** Ruth validates well but her responses lack the depth of a skilled EFT/Gottman therapist. She doesn't track emotional shifts across turns, misses repair attempts, has thin softening detection, and applies the same intervention depth regardless of where the user is in the conversation.
+
+**Clinical Reasoning (EFT + Gottman):**
+
+1. **Emotional Arc Tracking:** Sue Johnson's EFT model shows that emotional trajectories matter more than individual emotional states. A partner who shifts from anger to resignation is in a fundamentally different place than one who stays angry. Naming the shift itself ("something changed") is a core therapeutic intervention that signals deep attunement.
+
+2. **Repair Attempt Recognition:** Gottman's longitudinal research identifies repair attempts as THE strongest predictor of relationship success — more important than how much couples fight. Celebrating repair attempts reinforces the behavior and builds the couple's repair muscle. Many users make repairs unconsciously (humor, affection mid-conflict, taking accountability) and don't realize they're doing something crucial.
+
+3. **Softening Detection:** In EFT, the "softening" moment (shift from blame/anger to vulnerability/fear/need) is THE pivotal therapeutic moment. The existing prompt mentioned it but lacked detection markers, a step-by-step response protocol, and Hebrew-specific phrases. Enhanced protocol includes 6 detection patterns, a mandatory 5-step response, and rotation phrases.
+
+4. **Graduated Intervention Mapping:** A skilled therapist calibrates depth to readiness. Ruth was applying similar intervention depth at turn 1 and turn 8. The L0-L4 mapping with turn-based matrix and readiness/hold signals ensures Ruth starts with presence and builds to action only when the user signals readiness.
+
+**Change:** Added 4 new sections to both combined and standalone coaching prompts:
+- Emotional Arc Tracking — shift detection, arc-naming phrases, stuck-in-secondary check
+- Repair Attempt Recognition — 6 repair types, celebration protocol, Hebrew phrases
+- Softening Detection Protocol — 6 detection markers, 5-step response, Hebrew phrases
+- Graduated Intervention Mapping — L0-L4 levels, turn × state matrix, override rules
+
+**Supporting artifacts created:**
+- `ruth_training/knowledge_base/therapist_grade_reactions.md` — full WS2 knowledge base
+- `ruth_training/knowledge_base/response_patterns_ws2.md` — 28 Hebrew therapist-grade response patterns organized by emotion × turn phase
+
+**Expected Outcome:** Overall benchmark score improvement from 7.38 to 8.0+, with particular improvement in technique and empathy dimensions. Responses should feel like a skilled couples therapist, not a supportive chatbot.
+
+---
+
+## CPI-01 — Cross-Partner Intelligence Protocol (2026-03-31)
+
+**Observation:** Ruth hears both partners privately — this is her core differentiator as a mediator. However, she lacked explicit protocols for WHEN and HOW to leverage cross-partner knowledge. Without timing rules, she could inadvertently surface insights too early (feeling invalidating) or reveal confidential details.
+
+**Clinical Reasoning (EFT + Gottman):** Sue Johnson's EFT model emphasizes helping partners see each other's behavior as driven by attachment needs, not malice. The pursue-withdraw cycle (Stage 1 de-escalation) requires naming the pattern WITHOUT triggering defensiveness. Gottman's research on the "Four Horsemen" shows that contempt is the strongest predictor of divorce — but underneath contempt is deep disappointment. Cross-partner intelligence allows Ruth to translate these underlying emotions between partners using "bridge phrases" that reframe behavior without breaking confidentiality.
+
+**Change:** Added a comprehensive CPI section to the system prompt with:
+1. Timing rules (GREEN: after validation, when invited, during drafting / RED: during flooding, L3+ events, venting, secrets)
+2. Framing rules (always use general pattern knowledge, never reveal specifics)
+3. 12+ bridge phrases across 6 categories
+4. Pattern-specific strategies for 5 core dynamics
+
+**Expected Outcome:** Higher cross-partner insight quality scores (target 7.5+), more natural integration of partner perspective, maintained confidentiality, reduced "taking sides" perception.
+
+---
+
 ## BRV-02/03 — Intake Restructuring (2026-03-17)
 
 **Observation:** Ruth's first message to users contained 3 question marks ("מה קרה? מה היית רוצה להעביר? מה אסור לכלול?"), violating her own single-question rule and overwhelming users with multiple demands at once.
