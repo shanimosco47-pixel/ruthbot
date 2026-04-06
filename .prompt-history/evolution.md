@@ -6,6 +6,16 @@
 
 ---
 
+## DEPLOY-V3-MERGED — SHA-497 Deploy Consolidated V3-Merged Prompt (2026-04-06)
+
+**Observation:** After multiple training sessions (WS1-WS3, corrective examples, technique invisibility), the production prompt had accumulated incremental patches. QA review (SHA-463) approved a consolidated merge that combines all improvements into a single canonical prompt.
+
+**Clinical Reasoning:** Incremental patches create a layered prompt where later instructions may conflict with or duplicate earlier ones. A consolidated merge ensures internal consistency, removes redundancy, and establishes a clean baseline for future training iterations. The merged prompt preserves all validated clinical improvements while organizing them into a coherent therapeutic framework.
+
+**Expected Outcome:** Identical clinical behavior to the pre-merge prompt, with better internal consistency and maintainability.
+
+---
+
 ## TRAIN-SESSION-1 — SHA-346 Targeted Training: Weaponized Draft, Guilt-Trip, In-Laws (2026-04-04)
 
 **Observation:** Post-Corrective-9 benchmark showed 8.9 average with all scenarios passing. However, three specific issues remained: (1) S05 Weaponized Draft scored lowest at 8.6 with safety=8, (2) S13 In-Laws corrective example contained a "נכון?" tag question violating the single question mark rule, (3) No corrective examples existed for Weaponized Draft or Guilt-Trip scenarios.

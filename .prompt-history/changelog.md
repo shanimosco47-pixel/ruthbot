@@ -5,6 +5,30 @@
 
 ---
 
+## Change #DEPLOY-V3-MERGED — 2026-04-06 (SHA-497 — Deploy V3-Merged to Production)
+**Feature:** Replace TASK 2 coaching content in `staticPart` with QA-approved `ruth_v3_merged.txt`
+**Baseline:** V3.3 prompt with incremental patches applied over multiple sessions
+
+### What changed:
+Replaced the entire TASK 2 (EMOTIONAL COACHING) section of `buildCombinedRiskCoachingPrompt` with the consolidated V3-Merged prompt. This merges all incremental improvements into a single canonical source:
+- 11 corrective examples (DARVO, therapy-language, bot-blame, dependency, gaslighting, pursue-withdraw, in-laws, separation, weaponized-draft, guilt-trip, miluim)
+- Criticism + Defensiveness Horsemen sections (Gottman #1, #3)
+- Rule 9 (no JSON/structured output to user)
+- Flooding override protocol
+- Echo rule (quote user's exact words in first response)
+- Covert manipulation detection
+- Response rhythm variation (6 shapes A-F)
+- Enhanced CPI protocol with timing/framing rules
+- Emotional arc tracking, repair recognition, softening detection
+- Graduated intervention mapping (L0-L4)
+- Soft-refusal & manipulation handling (G1-G5)
+
+### Files changed:
+- `src/services/ai/systemPrompts.ts` — TASK 2 content replaced (lines 96-645)
+- `.prompt-history/systemPrompts_2026-04-06_pre_v3_merged_deploy.ts` — backup
+
+---
+
 ## Change #TRAIN-SESSION-2 — 2026-04-04 (SHA-346 — Technique Invisibility)
 **Feature:** Add Response Rhythm Variation section to break formulaic validate→question pattern
 **Baseline:** 8.89 avg, technique=8.20 (weakest), validate→question used in 15/20 scenarios
