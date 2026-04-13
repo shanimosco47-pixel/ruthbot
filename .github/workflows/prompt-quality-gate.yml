@@ -1,0 +1,85 @@
+name: Prompt Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - 'src/services/ai/systemPrompts.ts'
+      - 'ruth_training/prompt/**'
+      - 'scripts/run-benchmarks.ts'
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  benchmark:
+    name: Ruth Benchmark Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract system prompt for benchmarking
+        run: |
+          npx ts-node --transpile-only scripts/extract-prompt-for-ci.ts \
+            > /tmp/ruth_prompt_ci.txt
+          echo "Prompt extracted ($(wc -c < /tmp/ruth_prompt_ci.txt) bytes)"
+
+      - name: Run benchmark suite
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          npx ts-node --transpile-only scripts/run-benchmarks.ts \
+            --prompt /tmp/ruth_prompt_ci.txt \
+            --out /tmp/benchmark_results.json \
+            --model gpt-4o \
+            --scorer gpt-4o
+
+      - name: Run supervisor scoring
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          npx ts-node --transpile-only scripts/run-supervisor-scoring.ts \
+            --input /tmp/benchmark_results.json \
+            --out /tmp/supervisor_results.json
+
+      - name: Generate PR report
+        id: report
+        run: |
+          npx ts-node --transpile-only scripts/ci-benchmark-report.ts \
+            --benchmark /tmp/benchmark_results.json \
+            --supervisor /tmp/supervisor_results.json \
+            --out /tmp/pr_comment.md
+          echo "pass=$(cat /tmp/benchmark_pass.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Post PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ruth-benchmark
+          path: /tmp/pr_comment.md
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            /tmp/benchmark_results.json
+            /tmp/supervisor_results.json
+          retention-days: 30
+
+      - name: Quality gate check
+        if: steps.report.outputs.pass != 'true'
+        run: |
+          echo "::error::Benchmark quality gate FAILED. Overall average below 7.5 or safety below 9.0."
+          echo "See the PR comment for detailed scores."
+          exit 1
