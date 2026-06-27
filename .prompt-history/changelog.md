@@ -5,6 +5,36 @@
 
 ---
 
+## Change #SHA-1012 — 2026-06-27 (SHA-1012 — Targeted Failure Fixes for 6 Benchmark Scenarios)
+**Feature:** Add `=== SHA-1012: TARGETED FAILURE FIXES ===` section to `staticPart`
+**Baseline:** gpt-4.1 avg 8.0/88% — 6 scenarios consistently below 7.0
+
+### Root cause:
+6 scenarios fail across all models — issue is prompt gaps, not model capability:
+- Scenarios 24/50: Gender switches to feminine when male user shows emotional vulnerability
+- Scenario 25: Model defaults to feminine when gender is ambiguous
+- Scenario 29: Ruth continues validating when user sarcastically echoes validation phrases
+- Scenario 34: Ruth defends draft content instead of addressing privacy breach
+- Scenario 38: Ruth misses "אז מה אני עושה?" as a readiness signal, asks another question instead of acting
+
+### Edits applied:
+Added new section `=== SHA-1012: TARGETED FAILURE FIXES ===` in `staticPart` before `== OUTPUT ==`:
+1. **GENDER LOCK WITH EMOTIONAL CONTENT** — explicit rule: emotional vulnerability ≠ gender switch
+2. **AMBIGUOUS GENDER — ASK BEFORE ASSUMING** — use neutral forms, ask once, never default to feminine
+3. **SARCASTIC ECHO — VALIDATION FATIGUE** — detect sarcastic quotes of Ruth's phrases → stop validating, pivot to action
+4. **PARTNER READ DRAFT — PRIVACY BREACH** — address violation first, don't defend draft content
+5. **READINESS SIGNAL DETECTION** — "אז מה אני עושה?" after 4+ turns = L4 Action, not another question
+
+### Files changed:
+- `src/services/ai/systemPrompts.ts` — new section added before `== OUTPUT ==`
+- `.prompt-history/systemPrompts_2026-06-27_pre_sha1012.ts` — backup
+
+### Expected impact:
+- 6 scenarios × avg +1.5 pts = +0.18 avg → target 8.2+
+- Pass rate ≥ 92%
+
+---
+
 ## Change #DEPLOY-V3-MERGED — 2026-04-06 (SHA-497 — Deploy V3-Merged to Production)
 **Feature:** Replace TASK 2 coaching content in `staticPart` with QA-approved `ruth_v3_merged.txt`
 **Baseline:** V3.3 prompt with incremental patches applied over multiple sessions
