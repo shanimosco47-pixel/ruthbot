@@ -10,7 +10,7 @@
 - **Health:** https://ruthbot.onrender.com/health → `v3.4`
 - **Keep-alive:** UptimeRobot pings /health every 5 min
 - **Tests:** 281 passing, 0 failing
-- **Training score:** V2 44→90.3 | V3 benchmark 7.38 pessimistic (est. 7.9-8.4)
+- **Training score:** V2 44→90.3 | V3 benchmark: gpt-4o 7.92 (baseline), gpt-4.1 8.0 (current)
 
 ---
 
@@ -30,7 +30,7 @@
 - **Prisma:** uses `directUrl` for migrations (pgBouncer compatibility)
 
 ### AI — OpenAI (all AI services)
-- **LLM Model:** `gpt-4o` (env: `OPENAI_MODEL`)
+- **LLM Model:** `gpt-4.1` (env: `OPENAI_MODEL`) — upgraded 2026-06-27, +0.08 avg score vs gpt-4o
 - **Voice:** Whisper-1 (transcription)
 - **Embeddings:** text-embedding-3-small (pgvector)
 - **Key:** `.env` → `OPENAI_API_KEY`
@@ -114,10 +114,11 @@ npx prisma studio      # Visual DB browser
 
 ## Pending Work
 1. **DB push** — `npx prisma db push` to apply new UserMemory + InterventionOutcome tables ⚠️ run from local machine with .env
-2. **Real-world testing** — test with actual Telegram conversations
-3. **Stripe/payment** — need Israeli processor or international alternative
-4. **Resend email** — sign up, get key, verify domain
-5. **Continue training** — run trainer_bot on V3.4
+2. **Render env var** — update `OPENAI_MODEL=gpt-4.1` in Render dashboard (default already set in code)
+3. **Prompt surgery** — 6 persistent failures across gpt-4o & gpt-4.1: #24 Male Vulnerability, #25 Ambiguous Gender, #29 Sarcastic Echo, #34 Privacy Breach, #38 Readiness Signal, #50 Regression
+4. **Real-world testing** — test with actual Telegram conversations
+5. **Stripe/payment** — need Israeli processor or international alternative
+6. **Resend email** — sign up, get key, verify domain
 
 ---
 
